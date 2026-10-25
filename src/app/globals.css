@@ -615,6 +615,164 @@ main {
   accent-color: var(--accent);
 }
 
+/* The dashboard. Selectors start with .prose where they must beat its rules for p, h2, ul and li. */
+.overall {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+/* Current week and Review. Each keeps the room its text takes once progress is known (a two-line title and a
+   two-line Continue button; one line for the count of cards), so the weeks below don't jump when it arrives. */
+.dash-top {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.dash-top > :first-child {
+  min-height: 15.5rem;
+}
+
+.dash-top > :last-child {
+  min-height: 9rem;
+}
+
+@media (min-width: 40rem) {
+  .dash-top {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.prose .card > * {
+  margin: 0;
+}
+
+.prose .card-title {
+  padding: 0;
+  border: 0;
+  font-size: 1.25rem;
+}
+
+/* The button stays at the bottom of its card, whether or not the card has its text yet. */
+.prose .card > .btn {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+.prose .week-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.prose .week-grid > li {
+  margin: 0;
+}
+
+/* The week's title is the link's own text, so it is what the link is named by; the small lines around it are spans. */
+.week-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.week-card:hover {
+  border-color: var(--accent);
+}
+
+/* The current week is marked the way the current step is in the sidebar. */
+.week-card.current {
+  border-color: var(--accent);
+  background: var(--current-bg);
+  color: var(--current-fg);
+}
+
+.week-meta,
+.week-pct {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.week-pct {
+  min-height: 1lh; /* one line even while empty, so nothing moves when the number appears */
+}
+
+.week-pct.done {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.week-card.current :is(.week-meta, .week-pct:not(.done)) {
+  color: inherit;
+}
+
+/* The Capstone's weeks: a link on the left, "ticked / total" on the right. */
+.prose .capstone-weeks {
+  list-style: none;
+  padding: 0;
+}
+
+.prose .capstone-weeks li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.capstone-weeks .count {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Export / import. */
+.io label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+
+.notice {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+
+.notice.ok {
+  border-color: var(--ok);
+  background: var(--surface);
+  color: var(--fg);
+}
+
 /* A diagram the notes had as an image and the site doesn't have. */
 .diagram-missing {
   padding: 0.75rem 1rem;

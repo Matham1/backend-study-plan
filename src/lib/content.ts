@@ -3,6 +3,9 @@
 import { notes, plan } from '#site/content'
 import type { StepRef, WeekIndex } from './progress'
 
+/** For the pages that show the plan's own text (its title, intro and capstone checklist), which no week holds. */
+export { plan }
+
 export type Week = (typeof plan)['weeks'][number]
 export type Notes = (typeof notes)[number]
 export type Card = { id: string; label: string; questionHtml: string; answerHtml?: string }

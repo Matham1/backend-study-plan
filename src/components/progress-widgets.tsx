@@ -5,7 +5,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { dueCardIds, today, type WeekIndex } from '../lib/progress'
+import { dueCardIds, today, weekStats, type WeekIndex } from '../lib/progress'
 import { update, useProgress, useSaveFailed } from '../lib/storage'
 
 /** `ticks` with `key` set, or taken out. */
@@ -138,6 +138,25 @@ export function ReviewBadge({ cardIds }: { cardIds: string[] }) {
         <span className="sr-only"> due</span>
       </span>
     </>
+  )
+}
+
+/** The Capstone's list of weeks: each links to its Build & Test step, with how many of that step's boxes are ticked. */
+export function CapstoneWeeks({ weeks }: { weeks: WeekIndex[] }) {
+  const p = useProgress()
+  return (
+    // role="list" because Safari drops the list semantics of a list with no bullets.
+    <ul className="capstone-weeks" role="list">
+      {weeks.map(w => {
+        const stats = p && weekStats(w, p)
+        return (
+          <li key={w.n}>
+            <Link href={`/week/${w.n}/build/`}>{`Week ${w.n} · ${w.title}`}</Link>
+            <span className="count">{stats && `${stats.tasksDone} / ${stats.tasksTotal}`}</span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
