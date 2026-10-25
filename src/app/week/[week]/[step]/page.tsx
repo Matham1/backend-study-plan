@@ -1,7 +1,22 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Fragment } from 'react'
-import { applyFor, getWeek, inlineHtml, quizCards, quizNotes, readingSection, shortTitle, stepsOf, weeks } from '../../../../lib/content'
+import { DocLayout } from '../../../../components/chrome'
+import { WeekSidebar } from '../../../../components/nav'
+import {
+  applyFor,
+  getWeek,
+  inlineHtml,
+  quizCards,
+  quizNotes,
+  readingSection,
+  shortTitle,
+  stepsOf,
+  tocOf,
+  weekIndex,
+  weeks,
+  type TocItem,
+} from '../../../../lib/content'
 
 export const dynamicParams = false
 export const generateStaticParams = () =>
@@ -27,53 +42,67 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function StepPage({ params }: Props) {
   const { week, steps, at, step, reading } = await stepOf(params)
+  const sidebar = <WeekSidebar week={weekIndex(week)} />
 
   if (reading) {
     const { notes, section } = reading
     return (
-      <article>
-        <p className="kicker">{`Step ${at + 1} of ${steps.length} · ${shortTitle(notes)} notes`}</p>
-        <h1>{`${section.n}. ${section.title}`}</h1>
-        {section.body && <div dangerouslySetInnerHTML={{ __html: section.body }} />}
-      </article>
+      <DocLayout sidebar={sidebar} toc={section.body ? tocOf(section.body) : undefined}>
+        <article className="prose">
+          <p className="kicker">{`Step ${at + 1} of ${steps.length} · ${shortTitle(notes)} notes`}</p>
+          <h1>{`${section.n}. ${section.title}`}</h1>
+          {section.body && <div dangerouslySetInnerHTML={{ __html: section.body }} />}
+        </article>
+      </DocLayout>
     )
   }
 
-  if (step.kind === 'build')
+  if (step.kind === 'build') {
+    const apply = applyFor(week)
+    // The checklist headings have no ids, so "On this page" lists only the "From the notes" groups and their own headings.
+    const toc: TocItem[] = apply.flatMap(group => [
+      { id: `from-${group.slug}`, title: `From the notes: ${group.title}`, level: 2 },
+      ...tocOf(group.html),
+    ])
     return (
-      <article>
-        <h1>Build & Test</h1>
-        {week.checklists.map((list, i) => (
-          <Fragment key={i}>
-            <h2>{list.title}</h2>
-            <ul>
-              {list.items.map(task => (
-                <li key={task.id} dangerouslySetInnerHTML={{ __html: inlineHtml(task.text) }} />
-              ))}
-            </ul>
-          </Fragment>
-        ))}
-        {applyFor(week).map(group => (
-          <Fragment key={group.slug}>
-            <h2 id={`from-${group.slug}`}>{`From the notes: ${group.title}`}</h2>
-            <div dangerouslySetInnerHTML={{ __html: group.html }} />
-          </Fragment>
-        ))}
-      </article>
+      <DocLayout sidebar={sidebar} toc={toc}>
+        <article className="prose">
+          <h1>Build & Test</h1>
+          {week.checklists.map((list, i) => (
+            <Fragment key={i}>
+              <h2>{list.title}</h2>
+              <ul>
+                {list.items.map(task => (
+                  <li key={task.id} dangerouslySetInnerHTML={{ __html: inlineHtml(task.text) }} />
+                ))}
+              </ul>
+            </Fragment>
+          ))}
+          {apply.map(group => (
+            <Fragment key={group.slug}>
+              <h2 id={`from-${group.slug}`}>{`From the notes: ${group.title}`}</h2>
+              <div dangerouslySetInnerHTML={{ __html: group.html }} />
+            </Fragment>
+          ))}
+        </article>
+      </DocLayout>
     )
+  }
 
   // The quiz: the card count stands in for the flashcards until they exist.
   return (
-    <article>
-      <h1>Quiz</h1>
-      {week.selfCheck && (
-        <>
-          <h2>Self-check</h2>
-          <div dangerouslySetInnerHTML={{ __html: week.selfCheck }} />
-        </>
-      )}
-      {quizNotes(week).map(doc => doc.quiz.intro && <div key={doc.slug} dangerouslySetInnerHTML={{ __html: doc.quiz.intro }} />)}
-      <p>{`${quizCards(week).length} cards`}</p>
-    </article>
+    <DocLayout sidebar={sidebar}>
+      <article className="prose">
+        <h1>Quiz</h1>
+        {week.selfCheck && (
+          <>
+            <h2>Self-check</h2>
+            <div dangerouslySetInnerHTML={{ __html: week.selfCheck }} />
+          </>
+        )}
+        {quizNotes(week).map(doc => doc.quiz.intro && <div key={doc.slug} dangerouslySetInnerHTML={{ __html: doc.quiz.intro }} />)}
+        <p>{`${quizCards(week).length} cards`}</p>
+      </article>
+    </DocLayout>
   )
 }
