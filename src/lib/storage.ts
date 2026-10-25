@@ -45,13 +45,28 @@ export function parseProgress(text: string): { ok: true; progress: Progress } | 
 }
 
 let cache: Progress | undefined // undefined until the first read
+let unbacked: string | undefined // the stored text that failed to parse and could not be backed up; set by every read
 let saveFailed = false
 let listening = false
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(listener => listener())
 
-/** The stored progress. A value that fails `parseProgress` is copied to a backup key and left in place until the next write. */
+/** Copies a corrupt stored value to a backup key. False when there is no room. */
+function backUp(text: string): boolean {
+  try {
+    localStorage.setItem(`${PROGRESS_KEY}:backup-${new Date().toISOString()}`, text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The stored progress. A value that fails `parseProgress` is copied to a backup key and left in place until the next
+ * write. If the copy fails, `unbacked` keeps the text and `save` won't write over it until a retry works.
+ */
 function readStored(): Progress {
+  unbacked = undefined
   let text: string | null
   try {
     text = localStorage.getItem(PROGRESS_KEY)
@@ -61,11 +76,7 @@ function readStored(): Progress {
   if (text === null) return EMPTY_PROGRESS
   const result = parseProgress(text)
   if (result.ok) return result.progress
-  try {
-    localStorage.setItem(`${PROGRESS_KEY}:backup-${new Date().toISOString()}`, text)
-  } catch {
-    // no room for a backup either: nothing more to do
-  }
+  if (!backUp(text)) unbacked = text
   return EMPTY_PROGRESS
 }
 
@@ -91,15 +102,25 @@ export function subscribe(listener: () => void): () => void {
   }
 }
 
-/** Applies `change` to the current progress and saves the result with a new `updatedAt`. A failed write keeps the state in memory. */
-export function update(change: (p: Progress) => Progress): void {
-  cache = { ...change(getProgress()), updatedAt: new Date().toISOString() }
-  try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(cache))
-    saveFailed = false
-  } catch {
-    saveFailed = true
+/** Writes `p` to storage. False when it could not be written, or must not be: a corrupt value without a backup is never written over. */
+function save(p: Progress): boolean {
+  if (unbacked !== undefined) {
+    if (!backUp(unbacked)) return false
+    unbacked = undefined
   }
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(p))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Applies `change` to the current progress and saves the result with a new `updatedAt`. A failed save keeps the state in memory. */
+export function update(change: (p: Progress) => Progress): void {
+  const next = { ...change(getProgress()), updatedAt: new Date().toISOString() }
+  cache = next
+  saveFailed = !save(next)
   notify()
 }
 

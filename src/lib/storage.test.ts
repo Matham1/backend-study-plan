@@ -11,7 +11,23 @@ function stubStorage(init: Record<string, string> = {}, fail: { get?: boolean; s
   })
   return map
 }
+// A storage that fails a write when the keys and values it holds would pass `limit` characters, like a full browser quota.
+function stubQuota(init: Record<string, string>, limit: number) {
+  const map = new Map(Object.entries(init))
+  const size = (k: string, v: string) => k.length + v.length
+  const used = () => [...map].reduce((n, [k, v]) => n + size(k, v), 0)
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => map.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (used() - (map.has(k) ? size(k, map.get(k)!) : 0) + size(k, v) > limit) throw new Error('QuotaExceededError')
+      map.set(k, v)
+    },
+    removeItem: (k: string) => void map.delete(k),
+  })
+  return map
+}
 const fresh = async () => { vi.resetModules(); return import('./storage') }
+type Store = typeof import('./storage')
 beforeEach(() => vi.unstubAllGlobals())
 afterEach(() => vi.useRealTimers())
 
@@ -20,6 +36,8 @@ const THEME = 'backend-study:theme'
 const NOT_OURS = "This isn't a progress file from this site."
 const stored = { version: 1, updatedAt: '2026-10-25T10:00:00.000Z', checks: { 'w9:gone': true }, read: { 'async-1': true }, cards: { 'x-q1': { box: 1, due: '2026-10-26' } } }
 const withBase = (over: object) => JSON.stringify({ version: 1, updatedAt: '', checks: {}, read: {}, cards: {}, ...over })
+// Truncated JSON of 113 characters: with its key it takes most of a 200-character quota, so a copy never fits beside it.
+const BULKY_CORRUPT = '{"version":1,"checks":{' + '"x":true,'.repeat(10)
 
 describe('module', () => {
   it('pins the keys and the empty state', async () => {
@@ -154,13 +172,16 @@ describe('reading and writing', () => {
     expect(backups).toHaveLength(1)
     expect(map.get(backups[0])).toBe(other)
   })
-  it('replaces the corrupt value on the next write and keeps the backup', async () => {
+  it('replaces the corrupt value on the next write and keeps the one backup', async () => {
     const map = stubStorage({ [KEY]: '{oops' })
-    const { update } = await fresh()
+    const { getProgress, update } = await fresh()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-25T10:00:00.000Z'))
+    getProgress() // backs it up
+    vi.setSystemTime(new Date('2026-10-25T10:05:00.000Z'))
     update(p => ({ ...p, read: { a: true } }))
     expect(JSON.parse(map.get(KEY)!).read).toEqual({ a: true })
-    const backup = [...map.keys()].find(k => k.startsWith(`${KEY}:backup-`))
-    expect(backup && map.get(backup)).toBe('{oops')
+    expect([...map].filter(([k]) => k.startsWith(`${KEY}:backup-`))).toEqual([[`${KEY}:backup-2026-10-25T10:00:00.000Z`, '{oops']])
   })
 
   it('updates the stored progress, not an empty one', async () => {
@@ -233,6 +254,50 @@ describe('when saving fails', () => {
   })
 })
 
+// Spec section 4: corrupt data must never be replaced silently, so the original is kept somewhere until a backup holds it.
+describe('a corrupt stored value that could not be backed up', () => {
+  it('is backed up on the next write, once that works, before the new state replaces it', async () => {
+    const fail = { set: true }
+    const map = stubStorage({ [KEY]: '{oops' }, fail)
+    const backups = () => [...map].filter(([k]) => k.startsWith(`${KEY}:backup-`))
+    const { getProgress, update, isSaveFailed } = await fresh()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-25T10:00:00.000Z'))
+    getProgress() // the read tries to back it up and fails
+    expect(backups()).toEqual([])
+    fail.set = false
+    vi.setSystemTime(new Date('2026-10-25T10:05:00.000Z'))
+    update(p => ({ ...p, read: { a: true } }))
+    vi.setSystemTime(new Date('2026-10-25T10:10:00.000Z'))
+    update(p => ({ ...p, read: { ...p.read, b: true } }))
+    expect(backups()).toEqual([[`${KEY}:backup-2026-10-25T10:05:00.000Z`, '{oops']]) // one backup, from the first write
+    expect(JSON.parse(map.get(KEY)!).read).toEqual({ a: true, b: true })
+    expect(isSaveFailed()).toBe(false)
+  })
+  it('stays in place, with the change kept in memory and flagged, while the backup keeps failing', async () => {
+    const map = stubStorage({ [KEY]: '{oops' }, { set: true })
+    const { update, subscribe, getProgress, isSaveFailed } = await fresh()
+    const seen = vi.fn()
+    subscribe(seen)
+    update(p => ({ ...p, read: { a: true } }))
+    expect(map.get(KEY)).toBe('{oops')
+    expect(isSaveFailed()).toBe(true)
+    expect(getProgress().read).toEqual({ a: true })
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+  it.each([
+    ['update', (store: Store) => store.update(p => ({ ...p, read: { a: true } }))],
+    ['replaceProgress', (store: Store) => store.replaceProgress({ ...store.EMPTY_PROGRESS, read: { a: true } })],
+  ])('survives a storage too full to hold it twice, through %s', async (_, write) => {
+    const map = stubQuota({ [KEY]: BULKY_CORRUPT }, 200) // the replacement is smaller than the original, so it alone would fit
+    const store = await fresh()
+    write(store)
+    expect([...map.values()]).toContain(BULKY_CORRUPT) // as the progress key or as a backup, but somewhere
+    expect(store.isSaveFailed()).toBe(true)
+    expect(store.getProgress().read).toEqual({ a: true })
+  })
+})
+
 describe('other tabs (storage events)', () => {
   function stubWindow() {
     const handlers: ((e: { key: string | null }) => void)[] = []
@@ -271,6 +336,23 @@ describe('other tabs (storage events)', () => {
     expect(getProgress()).toEqual(stored)
     expect(getProgress()).not.toBe(before)
     expect(seen).toHaveBeenCalledTimes(1)
+  })
+  it('follows the stored value: writes are held back while an unbacked corrupt one is there, and resume once it is replaced', async () => {
+    const map = stubQuota({ [KEY]: withBase({}) }, 200)
+    const win = stubWindow()
+    const { subscribe, getProgress, update, isSaveFailed } = await fresh()
+    subscribe(() => {})
+    getProgress()
+    map.set(KEY, BULKY_CORRUPT) // another tab leaves a corrupt value that cannot be backed up
+    win.fire(KEY)
+    update(p => ({ ...p, read: { a: true } }))
+    expect(map.get(KEY)).toBe(BULKY_CORRUPT)
+    expect(isSaveFailed()).toBe(true)
+    map.set(KEY, withBase({})) // then another tab writes a good one: nothing is at risk any more
+    win.fire(KEY)
+    update(p => ({ ...p, read: { b: true } }))
+    expect(JSON.parse(map.get(KEY)!).read).toEqual({ b: true })
+    expect(isSaveFailed()).toBe(false)
   })
   it('re-reads and notifies when storage is cleared', async () => {
     const map = stubStorage({ [KEY]: JSON.stringify(stored) })
