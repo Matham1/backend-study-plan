@@ -1,0 +1,12 @@
+/* A minimal reset for now; the docs layout and themes come later. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
