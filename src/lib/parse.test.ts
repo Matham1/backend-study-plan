@@ -379,7 +379,7 @@ describe('resolveNotesRefs', () => {
   it('warns about links it cannot match and notes nobody links', () => {
     const weeks = [{ n: 0, notesRefs: [{ label: 'Nope', url: 'https://x', after: '', sections: 'all' as const }] }]
     expect(resolveNotesRefs(weeks, [{ slug: 'a', file: '0-a-notes.md', title: 'Week 0: A' }]))
-      .toEqual(['Week 0: link "Nope" matches no notes file', '0-a-notes.md is not linked from any week'])
+      .toEqual(['study-plan.md: Week 0: link "Nope" matches no notes file', '0-a-notes.md: not linked from any week'])
   })
 })
 
@@ -541,7 +541,7 @@ describe('notesSlug and resolveNotesRefs (remaining rules)', () => {
   })
   it('ignores case and a "Study Notes — " prefix, then falls back to the URL of a matched link', () => {
     const refs = [ref('study notes — WEEK 1: async python', 'https://a'), ref('Async', 'https://a'), ref('Async', 'https://other')]
-    expect(resolveNotesRefs([{ n: 1, notesRefs: refs }], [asyncNotes])).toEqual(['Week 1: link "Async" matches no notes file'])
+    expect(resolveNotesRefs([{ n: 1, notesRefs: refs }], [asyncNotes])).toEqual(['study-plan.md: Week 1: link "Async" matches no notes file'])
     expect(refs.map(r => r.slug)).toEqual(['async', 'async', undefined])
   })
   it('does not trust a slug set earlier', () => {
@@ -552,10 +552,10 @@ describe('notesSlug and resolveNotesRefs (remaining rules)', () => {
   it('warns when two notes files share a slug, after the other warnings', () => {
     expect(resolveNotesRefs([{ n: 1, notesRefs: [ref('Nope', 'https://x')] }], [asyncNotes, { ...asyncNotes, file: '2-async-notes.md', title: 'Week 2: Async' }]))
       .toEqual([
-        'Week 1: link "Nope" matches no notes file',
-        '1-async-notes.md is not linked from any week',
-        '2-async-notes.md is not linked from any week',
-        '2-async-notes.md has the same slug "async" as an earlier notes file',
+        'study-plan.md: Week 1: link "Nope" matches no notes file',
+        '1-async-notes.md: not linked from any week',
+        '2-async-notes.md: not linked from any week',
+        '2-async-notes.md: has the same slug "async" as an earlier notes file',
       ])
   })
 })

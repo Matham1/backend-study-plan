@@ -475,7 +475,8 @@ export function parseNotes(md: string, fileName: string): NotesData {
 /**
  * Sets `ref.slug` on every plan link: first by matching its text to a notes title (case and a
  * "Study Notes — " prefix ignored), then, for the rest, by the URL of a link that did match.
- * Returns warnings for links that match nothing and for notes no link reaches.
+ * Returns warnings for links that match nothing and for notes no link reaches, each starting with
+ * the file it is about (`study-plan.md: …` or `<notes file>: …`).
  */
 export function resolveNotesRefs(
   weeks: { n: number; notesRefs: NotesRef[] }[],
@@ -491,9 +492,9 @@ export function resolveNotesRefs(
   for (const { ref } of refs) ref.slug ??= slugByUrl.get(ref.url)
   const linked = new Set(refs.map(r => r.ref.slug))
   return [
-    ...refs.filter(r => !r.ref.slug).map(r => `Week ${r.week}: link "${r.ref.label}" matches no notes file`),
-    ...notes.filter(n => !linked.has(n.slug)).map(n => `${n.file} is not linked from any week`),
+    ...refs.filter(r => !r.ref.slug).map(r => `study-plan.md: Week ${r.week}: link "${r.ref.label}" matches no notes file`),
+    ...notes.filter(n => !linked.has(n.slug)).map(n => `${n.file}: not linked from any week`),
     // two files with one slug would hide each other from every lookup by slug
-    ...notes.filter((n, i) => notes.findIndex(m => m.slug === n.slug) < i).map(n => `${n.file} has the same slug "${n.slug}" as an earlier notes file`),
+    ...notes.filter((n, i) => notes.findIndex(m => m.slug === n.slug) < i).map(n => `${n.file}: has the same slug "${n.slug}" as an earlier notes file`),
   ]
 }
