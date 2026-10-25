@@ -21,6 +21,19 @@ export type PlanData = {
   capstone: { intro?: string; items: TaskData[] }
   warnings: string[]
 }
+export type CardData = { n: number; question: string; answer?: string }
+export type NotesData = {
+  slug: string
+  file: string
+  title: string
+  intro?: string
+  sections: { n: number; title: string; body?: string }[]
+  apply?: string
+  applyParts: { week: number; body: string }[]
+  quiz: { intro?: string; cards: CardData[] }
+  sources?: string
+  warnings: string[]
+}
 
 /** Plain text of inline Markdown, for ids and titles. Underscores stay. */
 export function plainText(md: string): string {
@@ -76,6 +89,34 @@ const LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g
 const joined = (lines: string[]) => lines.join('\n').trim()
 /** A Markdown field value is never '' (Velite rejects empty Markdown), so empty becomes undefined. */
 const markdown = (lines: string[]) => joined(lines) || undefined
+
+type Section = { at: number; text: string; body: string[]; fenced: boolean[] }
+
+/** The `## ` headings outside fences, each with the lines (and their fence flags) under it, up to the next heading. */
+function sectionsOf(lines: string[], fenced: boolean[]): Section[] {
+  const heads = lines.flatMap((line, at) => {
+    const m = fenced[at] ? null : SECTION_HEADING.exec(line)
+    return m ? [{ at, text: m[1] }] : []
+  })
+  return heads.map((h, k) => {
+    const end = heads[k + 1]?.at ?? lines.length
+    return { ...h, body: lines.slice(h.at + 1, end), fenced: fenced.slice(h.at + 1, end) }
+  })
+}
+
+/**
+ * The two header lines that are not intro: the first `# ` line outside fences (`title` is its text), and the
+ * byline right after it (a non-empty line with " · "). Each `...At` is a line index, or -1 when there is none.
+ */
+function header(lines: string[], fenced: boolean[]): { title: string; titleAt: number; bylineAt: number } {
+  const titleAt = lines.findIndex((line, i) => !fenced[i] && TITLE.test(line))
+  const next = titleAt < 0 ? -1 : lines.findIndex((line, i) => i > titleAt && line.trim() !== '')
+  return {
+    title: titleAt < 0 ? '' : TITLE.exec(lines[titleAt])![1],
+    titleAt,
+    bylineAt: next >= 0 && lines[next].includes(' · ') ? next : -1,
+  }
+}
 
 type ListBlock = { kind: 'list'; check: boolean; items: string[][] }
 type Block =
@@ -224,45 +265,235 @@ export function parsePlan(md: string): PlanData {
   const fenced = fenceMask(lines)
   const warnings: string[] = []
 
-  const headings: { at: number; text: string }[] = []
-  lines.forEach((line, at) => {
-    const m = fenced[at] ? null : SECTION_HEADING.exec(line)
-    if (m) headings.push({ at, text: m[1] })
-  })
-  const firstWeek = headings.find(h => WEEK_HEADING.test(lines[h.at]))?.at
+  const sections = sectionsOf(lines, fenced)
+  const firstWeek = sections.find(s => WEEK_HEADING.test(lines[s.at]))?.at
 
-  // Title, then the byline (a non-empty line with " · ") is dropped; the intro runs to the first week.
-  const titleAt = lines.findIndex((line, i) => !fenced[i] && TITLE.test(line))
-  let introFrom = titleAt + 1
-  if (titleAt >= 0) {
-    const next = lines.findIndex((line, i) => i >= introFrom && line.trim() !== '')
-    if (next >= 0 && lines[next].includes(' · ')) introFrom = next + 1
-  }
+  // Title, then the byline is dropped; the intro runs to the first week.
+  const { title, titleAt, bylineAt } = header(lines, fenced)
   const plan: PlanData = {
-    title: titleAt >= 0 ? TITLE.exec(lines[titleAt])![1] : '',
-    intro: markdown(lines.slice(introFrom, firstWeek)),
+    title,
+    intro: markdown(lines.slice(Math.max(titleAt, bylineAt) + 1, firstWeek)),
     weeks: [],
     capstone: { items: [] },
     warnings,
   }
 
   let capstoneSeen = false
-  headings.forEach((h, k) => {
-    if (firstWeek === undefined || h.at < firstWeek) return
-    const end = headings[k + 1]?.at ?? lines.length
-    const body = lines.slice(h.at + 1, end)
-    const mask = fenced.slice(h.at + 1, end)
-    const week = WEEK_HEADING.exec(lines[h.at])
+  for (const { at, text, body, fenced: mask } of sections) {
+    if (firstWeek === undefined || at < firstWeek) continue
+    const week = WEEK_HEADING.exec(lines[at])
     if (week) {
       const n = Number(week[1])
       if (plan.weeks.some(w => w.n === n)) warnings.push(`Week ${n}: duplicate week number`)
       else plan.weeks.push(parseWeek(week, body, mask, warnings))
-    } else if (/capstone checklist/i.test(h.text)) {
+    } else if (/capstone checklist/i.test(text)) {
       if (capstoneSeen) warnings.push('duplicate capstone checklist ignored')
       else plan.capstone = parseCapstone(body, mask)
       capstoneSeen = true
-    } else warnings.push(`unknown section "${h.text}" ignored`)
-  })
+    } else warnings.push(`unknown section "${text}" ignored`)
+  }
   if (!plan.weeks.length) warnings.push('no "## Week N — …" headings found')
   return plan
+}
+
+// ── Notes ──────────────────────────────────────────────────────────────────────────────────────────
+
+const NOTES_PREFIX = /^Study Notes\s*[—–-]\s*/i
+const NUMBERED_SECTION = /^(\d+)\.\s+(.*)$/ // "3. Title"
+const WEEK_PART = /^###\s+Week\s+(\d+)\b/ // "### Week 4: …"
+const QA_ITEM = /^(\d+)[.)]\s+(\S.*)$/ // "4. text", at column 0; \S keeps an item's text from being empty
+const CHECKBOX = /^(\s*[-*+]\s+)\[[ xX]\]\s+/ // the "[ ] " of a bullet
+const LOST_DIAGRAM = /^&#91;embedded content: (.*?)\\?\]\s*$/ // a diagram the export could not keep
+const FIXED = ['Apply it to the capstone', 'Check yourself', 'Answers', 'Sources']
+
+const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** `3-psql_indexes-notes.md` becomes `psql-indexes`: no number prefix, no `-notes.md`, `_` as `-`. */
+export function notesSlug(fileName: string): string {
+  const m = /^(?:\d+-)?(.*?)-notes\.md$/.exec(fileName)
+  return (m ? m[1] : fileName.replace(/\.md$/, '')).replace(/_/g, '-')
+}
+
+/** Export leftovers, fixed line by line outside fences: a `- [ ]` loses its box, a lost diagram becomes a grey note. */
+function tidy(lines: string[], fenced: boolean[]): string[] {
+  return lines.map((line, i) => {
+    if (fenced[i]) return line
+    const lost = LOST_DIAGRAM.exec(line)
+    return lost ? `<p class="diagram-missing">Diagram not included: ${escapeHtml(lost[1])}</p>` : line.replace(CHECKBOX, '$1')
+  })
+}
+
+/** `###` and `####` headings go up one level, so a step page's own title is its only top-level heading. */
+const lift = (lines: string[], fenced: boolean[]) =>
+  lines.map((line, i) => (fenced[i] ? line : line.replace(/^#(#{2,3})(?=\s)/, '$1')))
+
+type Item = { n: number; text: string }
+type Numbered = { items: Item[]; others: string[][] }
+
+/**
+ * Splits Check yourself or Answers into `N. text` items (at column 0) and the paragraphs around them. An item
+ * takes the lines right under it and, after a blank line, indented ones; its text joins them with newlines and
+ * drops their indentation. Fenced lines are never items: a fence stays whole, with the block it opens in.
+ */
+function numbered(lines: string[], fenced: boolean[]): Numbered {
+  const items: { n: number; lines: string[] }[] = []
+  const others: string[][] = []
+  let tail: string[] | null = null // the item or paragraph that still takes wrapped lines
+  let item: string[] | null = null // the last item: after a blank line, an indented line continues it
+  let indent = 0 // how far the open fence is indented; the fenced lines under it lose that much
+  const indentOf = (text: string) => text.length - text.trimStart().length
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i]
+    if (fenced[i] && fenced[i - 1]) {
+      // inside a fence: stays with the block the fence opened in (the opener set `tail`)
+      tail!.push(text.slice(Math.min(indent, indentOf(text))))
+      continue
+    }
+    const line = text.trim()
+    if (!line) {
+      tail = null
+      continue
+    }
+    const m = QA_ITEM.exec(text)
+    if (m) items.push({ n: Number(m[1]), lines: (tail = item = [m[2]]) })
+    else if (tail) tail.push(line)
+    else if (item && /^\s/.test(text)) {
+      item.push('', line)
+      tail = item
+    } else {
+      others.push((tail = [line]))
+      item = null
+    }
+    if (fenced[i]) indent = indentOf(text)
+  }
+  return { items: items.map(({ n, lines }) => ({ n, text: joined(lines) })), others }
+}
+
+/** The `### Week N` chunks of an Apply section, heading included. A week named twice keeps its first chunk. */
+function applyPartsOf(apply: Section, warnings: string[]): NotesData['applyParts'] {
+  const starts = apply.body.flatMap((line, i) => {
+    const m = apply.fenced[i] ? null : WEEK_PART.exec(line)
+    return m ? [{ at: i, week: Number(m[1]) }] : []
+  })
+  const parts: NotesData['applyParts'] = []
+  starts.forEach(({ at, week }, k) => {
+    if (parts.some(p => p.week === week)) warnings.push(`"### Week ${week}" appears twice in Apply; kept the first`)
+    else parts.push({ week, body: joined(apply.body.slice(at, starts[k + 1]?.at)) })
+  })
+  return parts
+}
+
+/**
+ * One card per question, in question order, with the answer of the same number. An answer with no question
+ * is dropped. A number used twice keeps its first text. With a section missing there is nothing to pair,
+ * and `missing` already said so.
+ */
+function pairCards(asked: Numbered | undefined, answered: Numbered | undefined, warnings: string[]): CardData[] {
+  const repeats: string[] = []
+  const firstOf = (kind: string, found: Item[] = []) =>
+    found.filter((x, i) => {
+      const repeat = found.findIndex(y => y.n === x.n) < i
+      if (repeat) repeats.push(`${kind} ${x.n} appears twice; kept the first`)
+      return !repeat
+    })
+  const questions = firstOf('question', asked?.items)
+  const answers = firstOf('answer', answered?.items)
+  const answerOf = new Map(answers.map(a => [a.n, a.text]))
+  const cards = questions.map(q => ({ n: q.n, question: q.text, answer: answerOf.get(q.n) }))
+  if (asked && answered) {
+    warnings.push(...cards.filter(c => !c.answer).map(c => `question ${c.n} has no answer`))
+    warnings.push(...answers.filter(a => !questions.some(q => q.n === a.n)).map(a => `answer ${a.n} has no question`))
+    if (questions.length !== answers.length) warnings.push(`${questions.length} questions but ${answers.length} answers`)
+  }
+  warnings.push(...repeats)
+  return cards
+}
+
+export function parseNotes(md: string, fileName: string): NotesData {
+  const raw = md.split(/\r?\n/)
+  const fenced = fenceMask(raw)
+  const lines = tidy(raw, fenced)
+  const sections = sectionsOf(lines, fenced)
+  const { title: heading, titleAt, bylineAt } = header(lines, fenced)
+  const title = heading.replace(NOTES_PREFIX, '')
+  const warnings: string[] = []
+  if (!title) warnings.push('no "# Study Notes — …" title found')
+
+  // Numbered sections are the reading steps. A heading with no number, or a number already taken, is kept
+  // as one more step numbered after the highest, so no content is lost.
+  const fixed = new Map<string, Section>()
+  const steps: NotesData['sections'] = []
+  const used = new Set<number>()
+  let top = Math.max(0, ...sections.map(s => Number(NUMBERED_SECTION.exec(s.text)?.[1] ?? 0)))
+  for (const s of sections) {
+    const name = FIXED.find(f => f.toLowerCase() === s.text.toLowerCase())
+    if (name) {
+      if (fixed.has(name)) warnings.push(`duplicate "## ${name}" ignored`)
+      else fixed.set(name, s)
+      continue
+    }
+    const m = NUMBERED_SECTION.exec(s.text)
+    let n = Number(m?.[1]) // NaN without a number
+    if (!m || used.has(n)) {
+      n = ++top
+      warnings.push(
+        m ? `section number ${m[1]} appears twice; "${s.text}" kept as section ${n}` : `unnumbered section "${s.text}" kept as section ${n}`,
+      )
+    }
+    used.add(n)
+    steps.push({ n, title: plainText(m ? m[2] : s.text), body: markdown(lift(s.body, s.fenced)) })
+  }
+  for (const name of FIXED) if (!fixed.has(name)) warnings.push(`missing "## ${name}"`)
+
+  const apply = fixed.get('Apply it to the capstone')
+  const applyParts = apply ? applyPartsOf(apply, warnings) : []
+
+  const qa = (name: string) => {
+    const s = fixed.get(name)
+    return s && numbered(s.body, s.fenced)
+  }
+  const asked = qa('Check yourself')
+  const answered = qa('Answers')
+  for (const p of answered?.others ?? []) warnings.push(`Answers: paragraph ignored ("${excerpt(p)}")`)
+  const cards = pairCards(asked, answered, warnings)
+
+  const sources = fixed.get('Sources')
+  return {
+    slug: notesSlug(fileName),
+    file: fileName,
+    title,
+    intro: markdown(lines.slice(0, sections[0]?.at).filter((_, i) => i !== titleAt && i !== bylineAt)),
+    sections: steps,
+    apply: apply && markdown(apply.body),
+    applyParts,
+    quiz: { intro: markdown((asked?.others ?? []).flatMap((p, k) => (k ? ['', ...p] : p))), cards },
+    sources: sources && markdown(sources.body),
+    warnings,
+  }
+}
+
+/**
+ * Sets `ref.slug` on every plan link: first by matching its text to a notes title (case and a
+ * "Study Notes — " prefix ignored), then, for the rest, by the URL of a link that did match.
+ * Returns warnings for links that match nothing and for notes no link reaches.
+ */
+export function resolveNotesRefs(
+  weeks: { n: number; notesRefs: NotesRef[] }[],
+  notes: { slug: string; file: string; title: string }[],
+): string[] {
+  const key = (title: string) => title.replace(NOTES_PREFIX, '').trim().toLowerCase()
+  const refs = weeks.flatMap(w => w.notesRefs.map(ref => ({ week: w.n, ref })))
+  const slugByUrl = new Map<string, string>()
+  for (const { ref } of refs) {
+    ref.slug = notes.find(n => key(n.title) === key(ref.label))?.slug
+    if (ref.slug && !slugByUrl.has(ref.url)) slugByUrl.set(ref.url, ref.slug)
+  }
+  for (const { ref } of refs) ref.slug ??= slugByUrl.get(ref.url)
+  const linked = new Set(refs.map(r => r.ref.slug))
+  return [
+    ...refs.filter(r => !r.ref.slug).map(r => `Week ${r.week}: link "${r.ref.label}" matches no notes file`),
+    ...notes.filter(n => !linked.has(n.slug)).map(n => `${n.file} is not linked from any week`),
+    // two files with one slug would hide each other from every lookup by slug
+    ...notes.filter((n, i) => notes.findIndex(m => m.slug === n.slug) < i).map(n => `${n.file} has the same slug "${n.slug}" as an earlier notes file`),
+  ]
 }

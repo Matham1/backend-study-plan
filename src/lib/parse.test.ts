@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parsePlan, plainText, textSlug } from './parse'
+import { type NotesData, notesSlug, parseNotes, parsePlan, plainText, resolveNotesRefs, textSlug } from './parse'
 
 export const fixture = (f: string) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8')
 const plan = parsePlan(fixture('study-plan.md'))
@@ -305,5 +305,257 @@ describe('plainText and textSlug', () => {
     expect(textSlug('--A--')).toBe('a')
     expect(textSlug('Ab cd efg', 6)).toBe('ab-cd')
     expect(textSlug('')).toBe('')
+  })
+})
+
+const notesFiles = readdirSync(new URL('./fixtures/', import.meta.url)).filter(f => f.endsWith('-notes.md'))
+const load = (f: string) => parseNotes(fixture(f), f)
+
+describe('Q&A pairing (12 frozen notes files)', () => {
+  it('finds all 12 files', () => expect(notesFiles).toHaveLength(12))
+  it.each(notesFiles)('%s pairs 12 questions with 12 answers, no warnings', f => {
+    const n = load(f)
+    expect(n.quiz.cards.map(c => c.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(n.quiz.cards.every(c => c.answer)).toBe(true)
+    expect(n.warnings).toEqual([])
+  })
+  const doc = (qs: string, as: string) =>
+    `# Study Notes — Week 0: T\n\nby · line\n\nIntro.\n\n## 1. One\n\nBody.\n\n## Apply it to the capstone\n\nDo it.\n\n## Check yourself\n\n${qs}\n\n## Answers\n\n${as}\n\n## Sources\n\n- s\n`
+  it('warns, not crashes, when counts differ', () => {
+    const n = parseNotes(doc('1. Q1\n2. Q2\n3. Q3', '1. A1\n2. A2'), '0-t-notes.md')
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q1', answer: 'A1' }, { n: 2, question: 'Q2', answer: 'A2' }, { n: 3, question: 'Q3' }])
+    expect(n.warnings).toEqual(['question 3 has no answer', '3 questions but 2 answers'])
+  })
+  it('drops answers without a question', () => {
+    const n = parseNotes(doc('1. Q1', '1. A1\n4. A4'), '0-t-notes.md')
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q1', answer: 'A1' }])
+    expect(n.warnings).toEqual(['answer 4 has no question', '1 questions but 2 answers'])
+  })
+  it('pairs by number, not position, and keeps continuation lines', () => {
+    const n = parseNotes(doc('2. Q2\n1. Q1', '1. A1\n   more\n2. A2'), '0-t-notes.md')
+    expect(n.quiz.cards).toEqual([{ n: 2, question: 'Q2', answer: 'A2' }, { n: 1, question: 'Q1', answer: 'A1\nmore' }])
+  })
+})
+
+describe('notes structure', () => {
+  const async = load('1-async-notes.md')
+  it('reads slug, title and numbered sections, promoting ### to ##', () => {
+    expect(async).toMatchObject({ slug: 'async', file: '1-async-notes.md', title: 'Week 1: Async Python' })
+    expect(async.sections.map(s => s.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(async.sections[2].title).toBe('Running things concurrently')
+    expect(async.sections[2].body).toMatch(/^Use `TaskGroup` by default/)
+    expect(async.sections[2].body).toContain('\n## Structured concurrency with `TaskGroup` (3.11+)\n')
+  })
+  it('handles file names and escaped titles', () => {
+    expect(notesSlug('3-psql_indexes-notes.md')).toBe('psql-indexes')
+    expect(load('8-testing-notes.md').sections[8].title).toBe('Test data and quality: factory_boy, coverage, time control')
+  })
+  it('splits "### Week N" parts out of an Apply section', () => {
+    expect(load('8-testing-notes.md').applyParts.map(p => p.week)).toEqual([2, 3, 4, 6, 8])
+    expect(async.applyParts).toEqual([])
+  })
+  it('marks lost diagrams and turns notes checkboxes into bullets', () => {
+    expect(async.sections[1].body).toContain('<p class="diagram-missing">Diagram not included: event loop cycle · 4 stages</p>')
+    const setup = load('0-setup-notes.md')
+    expect(setup.apply).toContain('- **Task 1:** Compose file with Postgres (healthcheck) and the API service')
+    expect(setup.apply).not.toContain('[ ]')
+  })
+  it('keeps the non-question paragraphs of Check yourself as the quiz intro', () => {
+    expect(load('6-edp-notes.md').quiz.intro).toMatch(/^Answer out loud[\s\S]*For more practice/)
+  })
+  it('ignores # lines inside code fences', () => {
+    const n = parseNotes('# Study Notes — X\n\n## 1. One\n\n```python\n# comment\n## not a heading\n```\n', '0-x-notes.md')
+    expect(n.sections).toHaveLength(1)
+    expect(n.sections[0].body).toContain('## not a heading')
+  })
+})
+
+describe('resolveNotesRefs', () => {
+  it('resolves every link in the frozen plan, short "Testing" links by URL', () => {
+    const p = parsePlan(fixture('study-plan.md'))
+    expect(resolveNotesRefs(p.weeks, notesFiles.map(load))).toEqual([])
+    expect(p.weeks[3].notesRefs.map(r => r.slug)).toEqual(['psql-indexes', 'psql-transactions', 'testing'])
+  })
+  it('warns about links it cannot match and notes nobody links', () => {
+    const weeks = [{ n: 0, notesRefs: [{ label: 'Nope', url: 'https://x', after: '', sections: 'all' as const }] }]
+    expect(resolveNotesRefs(weeks, [{ slug: 'a', file: '0-a-notes.md', title: 'Week 0: A' }]))
+      .toEqual(['Week 0: link "Nope" matches no notes file', '0-a-notes.md is not linked from any week'])
+  })
+})
+
+// Rules from the brief that the notes tests above do not exercise, and the warnings that keep notes content
+// from being dropped silently (the plan parser's rule).
+
+const quiz = (qs: string, as: string) =>
+  `## Apply it to the capstone\n\nDo it.\n\n## Check yourself\n\n${qs}\n\n## Answers\n\n${as}\n\n## Sources\n\n- s\n`
+const notes = (middle: string, tail = quiz('1. Q', '1. A')) =>
+  parseNotes(`# Study Notes — Week 0: T\n\nby · line\n\nIntro.\n\n${middle}\n\n${tail}`, '0-t-notes.md')
+
+describe('notes header and closing sections', () => {
+  it('drops the title line and the byline, and keeps the rest of the opening as the intro', () => {
+    const n = notes('## 1. One\n\nBody.')
+    expect(n).toMatchObject({ title: 'Week 0: T', intro: 'Intro.', apply: 'Do it.', sources: '- s', warnings: [] })
+    expect(n.sections).toEqual([{ n: 1, title: 'One', body: 'Body.' }])
+    expect(load('1-async-notes.md').intro).toMatch(/^After this week you will know what the asyncio event loop[\s\S]*httpx\.$/)
+    expect(load('1-async-notes.md').intro).not.toContain('Mathew')
+  })
+  it('takes the title of the testing notes, which has no week number', () => {
+    expect(load('8-testing-notes.md').title).toBe('Testing: Unit, Integration and CI')
+  })
+  it('matches the fixed section names in any case', () => {
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q', '1. A').replace('## Answers', '## ANSWERS').replace('## Sources', '## sources'))
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q', answer: 'A' }])
+    expect(n.sources).toBe('- s')
+    expect(n.warnings).toEqual([])
+  })
+  it('joins the Check yourself paragraphs around the questions with a blank line', () => {
+    expect(notes('## 1. One\n\nBody.', quiz('Before.\n\n1. Q\n\nAfter.', '1. A')).quiz.intro).toBe('Before.\n\nAfter.')
+  })
+  it('lets an item take an indented paragraph after a blank line, but not a flush one', () => {
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q\n\n   more Q\n\nFlush.', '1. A\n\n   More A.\n2. B'))
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q\n\nmore Q', answer: 'A\n\nMore A.' }])
+    expect(n.quiz.intro).toBe('Flush.')
+  })
+})
+
+describe('notes cleanup', () => {
+  it('works line by line, outside fences only', () => {
+    const body = notes(
+      '## 1. One\n\n#### Deep\n\n&#91;embedded content: a < b & "c"\\]\n\n* [x] done\n  - [ ] nested\n\n```md\n### kept\n- [ ] kept\n&#91;embedded content: kept\\]\n```',
+    ).sections[0].body
+    expect(body).toBe(
+      '### Deep\n\n<p class="diagram-missing">Diagram not included: a &lt; b &amp; &quot;c&quot;</p>\n\n* done\n  - nested\n\n```md\n### kept\n- [ ] kept\n&#91;embedded content: kept\\]\n```',
+    )
+  })
+  it('reads CRLF files, fences included', () => {
+    const md = fixture('1-async-notes.md')
+    expect(parseNotes(md.replace(/\n/g, '\r\n'), '1-async-notes.md')).toEqual(parseNotes(md, '1-async-notes.md'))
+  })
+})
+
+describe('notes content that cannot be placed is reported, never dropped silently', () => {
+  it('keeps an unnumbered section as the next step after the highest number', () => {
+    const n = notes('## 1. One\n\nBody.\n\n## Pitfalls\n\nWatch out.\n\n## 3. Three\n\nLast.')
+    expect(n.sections).toEqual([
+      { n: 1, title: 'One', body: 'Body.' },
+      { n: 4, title: 'Pitfalls', body: 'Watch out.' },
+      { n: 3, title: 'Three', body: 'Last.' },
+    ])
+    expect(n.warnings).toEqual(['unnumbered section "Pitfalls" kept as section 4'])
+  })
+  it('does the same for a number that is already taken', () => {
+    const n = notes('## 1. One\n\nA.\n\n## 1. Again\n\nB.\n\n## Extra\n\nC.')
+    expect(n.sections.map(x => [x.n, x.title, x.body])).toEqual([[1, 'One', 'A.'], [2, 'Again', 'B.'], [3, 'Extra', 'C.']])
+    expect(n.warnings).toEqual(['section number 1 appears twice; "1. Again" kept as section 2', 'unnumbered section "Extra" kept as section 3'])
+  })
+  it('reports each missing fixed section in order, without a warning per card', () => {
+    const n = parseNotes('# Study Notes — X\n\n## 1. One\n\nBody.\n', '0-x-notes.md')
+    expect(n.warnings).toEqual(['missing "## Apply it to the capstone"', 'missing "## Check yourself"', 'missing "## Answers"', 'missing "## Sources"'])
+    expect([n.apply, n.sources, n.quiz.intro]).toEqual([undefined, undefined, undefined])
+    expect([n.applyParts, n.quiz.cards]).toEqual([[], []])
+    const noAnswers = notes('## 1. One\n\nBody.', '## Apply it to the capstone\n\nx\n\n## Check yourself\n\n1. Q\n\n## Sources\n\n- s\n')
+    expect(noAnswers.quiz.cards).toEqual([{ n: 1, question: 'Q' }])
+    expect(noAnswers.warnings).toEqual(['missing "## Answers"'])
+  })
+  it('keeps the first of a repeated fixed section', () => {
+    const n = notes('## 1. One\n\nBody.', `${quiz('1. Q', '1. A')}\n## Sources\n\n- again\n\n## Answers\n\n1. other\n`)
+    expect(n.sources).toBe('- s')
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q', answer: 'A' }])
+    expect(n.warnings).toEqual(['duplicate "## Sources" ignored', 'duplicate "## Answers" ignored'])
+  })
+  it('warns about a missing title, and keeps text in front of the title as intro', () => {
+    const none = parseNotes(`Intro.\n\n## 1. One\n\nBody.\n\n${quiz('1. Q', '1. A')}`, '0-t-notes.md')
+    expect(none.title).toBe('')
+    expect(none.intro).toBe('Intro.')
+    expect(none.warnings).toEqual(['no "# Study Notes — …" title found'])
+    const front = parseNotes(`front matter\n\n# Study Notes — Week 0: T\n\nby · line\n\nIntro.\n\n## 1. One\n\nBody.\n\n${quiz('1. Q', '1. A')}`, '0-t-notes.md')
+    expect(front.title).toBe('Week 0: T')
+    expect(front.intro).toMatch(/^front matter\s+Intro\.$/)
+    expect(front.warnings).toEqual([])
+  })
+  it('reports text in Answers that is not an answer', () => {
+    const closing = 'Read these after trying.\n\n1. A\n\nClosing words that run on past forty characters.'
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q', closing))
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q', answer: 'A' }])
+    expect(n.warnings).toEqual(['Answers: paragraph ignored ("Read these after trying.")', 'Answers: paragraph ignored ("Closing words that run on past forty cha")'])
+  })
+  it('keeps the first of a repeated question or answer number, and reports it after the count', () => {
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q1\n2. Q2\n2. Q2 again', '1. A1\n1. A1 again\n2. A2'))
+    expect(n.quiz.cards).toEqual([{ n: 1, question: 'Q1', answer: 'A1' }, { n: 2, question: 'Q2', answer: 'A2' }])
+    expect(n.warnings).toEqual(['question 2 appears twice; kept the first', 'answer 1 appears twice; kept the first'])
+    expect(notes('## 1. One\n\nBody.', quiz('1. Q1\n1. Q1b', '1. A1\n2. A2')).warnings)
+      .toEqual(['answer 2 has no question', '1 questions but 2 answers', 'question 1 appears twice; kept the first'])
+  })
+  it('keeps the first of a repeated "### Week N" part; text before the first part stays in apply', () => {
+    const apply = 'Lead-in.\n\n### Week 2: a\n\nOne.\n\n### Week 3: b\n\nTwo.\n\n### Week 2: again\n\nThree.'
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q', '1. A').replace('Do it.', apply))
+    expect(n.applyParts).toEqual([{ week: 2, body: '### Week 2: a\n\nOne.' }, { week: 3, body: '### Week 3: b\n\nTwo.' }])
+    expect(n.apply).toBe(apply)
+    expect(n.warnings).toEqual(['"### Week 2" appears twice in Apply; kept the first'])
+  })
+  it('keeps a fenced block in an answer whole, and does not read its lines as items', () => {
+    const answers = '1. Run it:\n   ```python\n   1. not an item\n\n       indented()\n   ```\n   Then done.\n2. Next'
+    const n = notes('## 1. One\n\nBody.', quiz('1. Q1\n2. Q2', answers))
+    expect(n.quiz.cards).toEqual([
+      { n: 1, question: 'Q1', answer: 'Run it:\n```python\n1. not an item\n\n    indented()\n```\nThen done.' },
+      { n: 2, question: 'Q2', answer: 'Next' },
+    ])
+    expect(n.warnings).toEqual([])
+  })
+})
+
+describe('odd notes never throw and never yield empty Markdown', () => {
+  const markdownOf = (n: NotesData) => [
+    n.intro, n.apply, n.sources, n.quiz.intro,
+    ...n.sections.map(x => x.body),
+    ...n.applyParts.map(x => x.body),
+    ...n.quiz.cards.flatMap(c => [c.question, c.answer]),
+  ]
+  it('turns empty sections into undefined', () => {
+    const n = parseNotes('# Study Notes — X\n\n## 1. One\n\n## Apply it to the capstone\n\n## Check yourself\n\n## Answers\n\n## Sources\n', '0-x-notes.md')
+    expect(markdownOf(n).every(m => m === undefined)).toBe(true)
+    expect(n.sections).toHaveLength(1)
+    expect(n.warnings).toEqual([])
+  })
+  it('does not make a card from a bare number', () => {
+    const n = notes('## 1. One\n\nBody.', quiz('1.   \n2. Q2', '1. A\n2. B'))
+    expect(n.quiz.cards).toEqual([{ n: 2, question: 'Q2', answer: 'B' }])
+    expect(n.quiz.intro).toBe('1.')
+    expect(n.warnings).toEqual(['answer 1 has no question', '1 questions but 2 answers'])
+  })
+  it('survives every real file cut off anywhere', () => {
+    for (const f of notesFiles) {
+      for (const cut of [0, 1, 40, 600, 4000, 20000]) {
+        expect(markdownOf(parseNotes(fixture(f).slice(0, cut), f))).not.toContain('')
+      }
+    }
+    expect(() => parseNotes('', 'x.md')).not.toThrow()
+  })
+})
+
+describe('notesSlug and resolveNotesRefs (remaining rules)', () => {
+  const ref = (label: string, url: string) => ({ label, url, after: '', sections: 'all' as const, slug: undefined as string | undefined })
+  const asyncNotes = { slug: 'async', file: '1-async-notes.md', title: 'Week 1: Async Python' }
+  it('slugs file names with or without a number, and falls back to the whole name', () => {
+    expect(['1-async-notes.md', 'redis-notes.md', '10-foo_bar_baz-notes.md', 'readme.md'].map(notesSlug)).toEqual(['async', 'redis', 'foo-bar-baz', 'readme'])
+  })
+  it('ignores case and a "Study Notes — " prefix, then falls back to the URL of a matched link', () => {
+    const refs = [ref('study notes — WEEK 1: async python', 'https://a'), ref('Async', 'https://a'), ref('Async', 'https://other')]
+    expect(resolveNotesRefs([{ n: 1, notesRefs: refs }], [asyncNotes])).toEqual(['Week 1: link "Async" matches no notes file'])
+    expect(refs.map(r => r.slug)).toEqual(['async', 'async', undefined])
+  })
+  it('does not trust a slug set earlier', () => {
+    const stale = { ...ref('Nope', 'https://x'), slug: 'stale' }
+    resolveNotesRefs([{ n: 0, notesRefs: [stale] }], [])
+    expect(stale.slug).toBeUndefined()
+  })
+  it('warns when two notes files share a slug, after the other warnings', () => {
+    expect(resolveNotesRefs([{ n: 1, notesRefs: [ref('Nope', 'https://x')] }], [asyncNotes, { ...asyncNotes, file: '2-async-notes.md', title: 'Week 2: Async' }]))
+      .toEqual([
+        'Week 1: link "Nope" matches no notes file',
+        '1-async-notes.md is not linked from any week',
+        '2-async-notes.md is not linked from any week',
+        '2-async-notes.md has the same slug "async" as an earlier notes file',
+      ])
   })
 })
