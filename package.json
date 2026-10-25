@@ -1,0 +1,27 @@
+{
+  "name": "backend-study",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build && pagefind --site out",
+    "preview": "pagefind --site out --serve",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "^16.4",
+    "react": "^19.3",
+    "react-dom": "^19.3",
+    "velite": "^0.4.0",
+    "rehype-pretty-code": "^0.14.5",
+    "shiki": "^4.5",
+    "rehype-slug": "^6"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "vitest": "^5",
+    "pagefind": "^1.5"
+  }
+}
