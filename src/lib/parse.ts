@@ -78,17 +78,23 @@ const joined = (lines: string[]) => lines.join('\n').trim()
 const markdown = (lines: string[]) => joined(lines) || undefined
 
 type ListBlock = { kind: 'list'; check: boolean; items: string[][] }
-type Block = { kind: 'field'; label: string; lines: string[] } | { kind: 'label'; label: string } | ListBlock
+type Block =
+  | { kind: 'field'; label: string; lines: string[] }
+  | { kind: 'label'; label: string }
+  | { kind: 'paragraph'; lines: string[] }
+  | ListBlock
 
 /**
- * Groups a section body into `**Label:** text` fields, `**Label**` lines and lists of `- [ ]` or `1.`
- * items. A field or item keeps taking the lines right under it (wrapped text). Fenced lines and other
- * paragraphs are skipped.
+ * Groups a section body into `**Label:** text` fields, `**Label**` lines, lists of `- [ ]` or `1.` items,
+ * and free paragraphs (anything else). A field, item or paragraph keeps taking the lines right under it
+ * (wrapped text). After a blank line, an indented line continues the last list item and keeps the blank
+ * line in its text, so a loose list stays one list. Fenced lines are skipped.
  */
 function blocks(lines: string[], fenced: boolean[]): Block[] {
   const out: Block[] = []
-  let tail: string[] | null = null // the field or item that still takes wrapped lines
+  let tail: string[] | null = null // the field, item or paragraph that still takes wrapped lines
   let list: ListBlock | null = null
+  let item: string[] | null = null // the last list item: after a blank line, an indented line continues it
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     if (fenced[i] || !line) {
@@ -98,22 +104,32 @@ function blocks(lines: string[], fenced: boolean[]): Block[] {
     const field = FIELD.exec(line)
     const label = LABEL.exec(line)
     const task = CHECK_ITEM.exec(line)
-    const item = task ?? NUMBERED_ITEM.exec(line)
+    const entry = task ?? NUMBERED_ITEM.exec(line)
     if (field) {
       out.push({ kind: 'field', label: field[1].trim(), lines: (tail = [field[2]]) })
-      list = null
+      list = item = null
     } else if (label) {
       out.push({ kind: 'label', label: label[1].trim() })
-      tail = list = null
-    } else if (item) {
+      tail = list = item = null
+    } else if (entry) {
       const check = task !== null
       if (!list || list.check !== check) out.push((list = { kind: 'list', check, items: [] }))
-      list.items.push((tail = [item[1]]))
+      list.items.push((item = tail = [entry[1]]))
     } else if (tail) tail.push(line)
-    else list = null
+    else if (item && /^\s/.test(lines[i])) {
+      // no tail but an open item: the previous line was blank (or fenced)
+      item.push('', line)
+      tail = item
+    } else {
+      out.push({ kind: 'paragraph', lines: (tail = [line]) })
+      list = item = null
+    }
   }
   return out
 }
+
+/** The first 40 characters of some lines as plain text, to point at them in a warning. */
+const excerpt = (lines: string[]) => plainText(joined(lines)).slice(0, 40)
 
 /** Hands out `<prefix><slug>` ids from item text; a slug already used in this scope gets -2, -3, … */
 function idScope(prefix: string): (text: string) => string {
@@ -163,32 +179,30 @@ function parseWeek(head: RegExpExecArray, body: string[], fenced: boolean[], war
   }
   const unlisted = (label: string) => warnings.push(`Week ${n}: "${label}" is not followed by a list`)
 
+  const seen = new Set<string>() // Goal / Self-check fields already read: the first one wins
   let label: string | undefined // a **Label** line still waiting for its list
   for (const b of blocks(body, fenced)) {
     if (b.kind === 'field') {
-      switch (b.label.toLowerCase()) {
-        case 'goal':
-          week.goal ??= markdown(b.lines)
-          break
-        case 'self-check':
-          week.selfCheck ??= markdown(b.lines)
-          break
-        case 'study notes':
-          week.notesRefs.push(...notesRefsOf(b.lines.join('\n'), n, warnings))
-          break
-        default:
-          warnings.push(`Week ${n}: unknown field "${b.label}"`)
-      }
+      const key = b.label.toLowerCase()
+      if (key === 'goal' || key === 'self-check') {
+        if (seen.has(key)) warnings.push(`Week ${n}: duplicate field "${b.label}" ignored`)
+        else week[key === 'goal' ? 'goal' : 'selfCheck'] = markdown(b.lines)
+        seen.add(key)
+      } else if (key === 'study notes') week.notesRefs.push(...notesRefsOf(b.lines.join('\n'), n, warnings))
+      else warnings.push(`Week ${n}: unknown field "${b.label}"`)
     } else if (b.kind === 'label') {
       if (label !== undefined) unlisted(label)
       label = b.label
-    } else if (label !== undefined) {
+    } else if (b.kind === 'paragraph') {
+      warnings.push(`Week ${n}: paragraph ignored ("${excerpt(b.lines)}")`)
+    } else if (label === undefined) {
+      warnings.push(`Week ${n}: list without a **Label** line ignored ("${excerpt(b.items[0])}")`)
+    } else {
       if (b.check) week.checklists.push({ title: label, items: b.items.map(task) })
       else if (/^study\b/i.test(label)) week.study.push(...b.items.map(studyItem))
       else unlisted(label)
       label = undefined
     }
-    // else a list with no **Label** above it: dropped. ponytail: no warning for that, add one if plans start using them.
   }
   if (label !== undefined) unlisted(label)
   if (!week.goal) warnings.push(`Week ${n}: no Goal`)
@@ -232,6 +246,7 @@ export function parsePlan(md: string): PlanData {
     warnings,
   }
 
+  let capstoneSeen = false
   headings.forEach((h, k) => {
     if (firstWeek === undefined || h.at < firstWeek) return
     const end = headings[k + 1]?.at ?? lines.length
@@ -242,8 +257,11 @@ export function parsePlan(md: string): PlanData {
       const n = Number(week[1])
       if (plan.weeks.some(w => w.n === n)) warnings.push(`Week ${n}: duplicate week number`)
       else plan.weeks.push(parseWeek(week, body, mask, warnings))
-    } else if (/capstone checklist/i.test(h.text)) plan.capstone = parseCapstone(body, mask)
-    else warnings.push(`unknown section "${h.text}" ignored`)
+    } else if (/capstone checklist/i.test(h.text)) {
+      if (capstoneSeen) warnings.push('duplicate capstone checklist ignored')
+      else plan.capstone = parseCapstone(body, mask)
+      capstoneSeen = true
+    } else warnings.push(`unknown section "${h.text}" ignored`)
   })
   if (!plan.weeks.length) warnings.push('no "## Week N — …" headings found')
   return plan

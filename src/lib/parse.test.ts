@@ -153,9 +153,9 @@ describe('plan warnings (remaining rules)', () => {
     expect(p.weeks[0].notesRefs[0].after).toBe(' (days 1–2), and then') // only trailing whitespace is trimmed
     expect(p.warnings).toEqual([expect.stringMatching(/^Week 0: couldn't read " ?only the intro" after "B"; using all sections$/)])
   })
-  it('treats ### headings as ordinary text inside a week', () => {
+  it('does not end a week at a ### heading; the heading is reported as an ignored paragraph', () => {
     const p = parsePlan(`${head}### Details\n\n**Build**\n\n- [ ] one\n`)
-    expect(p.warnings).toEqual([])
+    expect(p.warnings).toEqual(['Week 0: paragraph ignored ("### Details")'])
     expect(p.weeks[0].checklists).toHaveLength(1)
   })
   it('lets the first matching section rule win', () => {
@@ -163,6 +163,96 @@ describe('plan warnings (remaining rules)', () => {
     expect(sections('sections 2-4 and section 9')).toEqual([2, 3, 4])
     expect(sections('section 7, and the Week 3 part of it')).toEqual([7])
     expect(sections('the Week 3 part of it')).toEqual([])
+  })
+})
+
+// Review fix: tracked tasks must never vanish without a warning.
+describe('content that cannot be placed is reported, never dropped silently', () => {
+  const head = '# P\n\n## Week 0 — A (1 day)\n\n**Goal:** g\n\n'
+
+  describe('an indented line after a blank line continues the list item', () => {
+    it('keeps a loose list together (item with an indented second paragraph)', () => {
+      const p = parsePlan(`${head}**Build**\n\n- [ ] Item one\n\n  More details here.\n\n- [ ] Item two\n- [ ] Item three\n`)
+      expect(p.weeks[0].checklists).toEqual([{ title: 'Build', items: [
+        { id: 'w0:item-one-more-details-here', text: 'Item one\n\nMore details here.' },
+        { id: 'w0:item-two', text: 'Item two' },
+        { id: 'w0:item-three', text: 'Item three' },
+      ] }])
+      expect(p.warnings).toEqual([])
+    })
+    it('also takes a nested bullet, wrapped lines and further paragraphs', () => {
+      const p = parsePlan(`${head}**Build**\n\n- [ ] One\n\n  - nested bullet\n  wrapped under it\n\n  Second paragraph\n- [ ] Two\n`)
+      expect(p.weeks[0].checklists[0].items).toEqual([
+        { id: 'w0:one-nested-bullet-wrapped-under-it-second-paragraph', text: 'One\n\n- nested bullet\nwrapped under it\n\nSecond paragraph' },
+        { id: 'w0:two', text: 'Two' },
+      ])
+      expect(p.warnings).toEqual([])
+    })
+    it('works for study items and capstone items too', () => {
+      const p = parsePlan(`${head}**Study, in order**\n\n1. **Day 1:** Read it\n\n   Extra note\n2. Next\n\n**Build**\n\n- [ ] t\n\n## Final capstone checklist\n\n- [ ] A\n\n  more\n- [ ] B\n`)
+      expect(p.weeks[0].study).toEqual([
+        { id: 'w0:day-1-read-it-extra-note', label: 'Day 1', text: 'Read it\n\nExtra note', optional: false },
+        { id: 'w0:next', text: 'Next', optional: false },
+      ])
+      expect(p.capstone.items).toEqual([{ id: 'capstone:a-more', text: 'A\n\nmore' }, { id: 'capstone:b', text: 'B' }])
+      expect(p.warnings).toEqual([])
+    })
+    it('does not take an unindented paragraph', () => {
+      const p = parsePlan(`${head}**Build**\n\n- [ ] One\n\nNot indented.\n`)
+      expect(p.weeks[0].checklists[0].items).toEqual([{ id: 'w0:one', text: 'One' }])
+      expect(p.warnings).toEqual(['Week 0: paragraph ignored ("Not indented.")'])
+    })
+  })
+
+  describe('a list with no **Label** line before it', () => {
+    it('is reported when a paragraph splits a list (the first list used the label up)', () => {
+      const p = parsePlan(`${head}**Build**\n\n- [ ] one\n\nA note in between.\n\n- [ ] two\n- [ ] three\n`)
+      expect(p.weeks[0].checklists).toEqual([{ title: 'Build', items: [{ id: 'w0:one', text: 'one' }] }])
+      expect(p.warnings).toEqual([
+        'Week 0: paragraph ignored ("A note in between.")',
+        'Week 0: list without a **Label** line ignored ("two")',
+      ])
+    })
+    it('is reported when it is the only list, not just "no checklists"', () => {
+      const p = parsePlan(`${head}- [ ] orphan task\n- [ ] another\n`)
+      expect(p.warnings).toEqual(['Week 0: list without a **Label** line ignored ("orphan task")', 'Week 0: no checklists'])
+    })
+    it('quotes the first 40 characters of the first item as plain text, for numbered lists too', () => {
+      const p = parsePlan(`${head}1. **Day 1:** Read [the docs](https://x.y) about the thing, then do more of it\n2. Second\n`)
+      expect(p.weeks[0].study).toEqual([])
+      expect(p.warnings).toEqual(['Week 0: list without a **Label** line ignored ("Day 1: Read the docs about the thing, th")', 'Week 0: no checklists'])
+    })
+  })
+
+  describe('a free paragraph in a week', () => {
+    it('is reported once with its first 40 plain characters, and the pending label survives it', () => {
+      const p = parsePlan(`${head}Free text that runs on\nover two lines and is longer than forty characters.\n\n**Build**\n\nA note under the label.\n\n- [ ] one\n`)
+      expect(p.warnings).toEqual([
+        'Week 0: paragraph ignored ("Free text that runs on over two lines an")',
+        'Week 0: paragraph ignored ("A note under the label.")',
+      ])
+      expect(p.weeks[0].checklists).toEqual([{ title: 'Build', items: [{ id: 'w0:one', text: 'one' }] }])
+    })
+  })
+
+  describe('a repeated Goal or Self-check', () => {
+    it('keeps the first and warns where the repeat is found', () => {
+      const p = parsePlan(`${head}**Goal:** second\n\n**Self-check:** one\n\n**Self-check:** two\n`)
+      expect(p.weeks[0]).toMatchObject({ goal: 'g', selfCheck: 'one' })
+      expect(p.warnings).toEqual([
+        'Week 0: duplicate field "Goal" ignored',
+        'Week 0: duplicate field "Self-check" ignored',
+        'Week 0: no checklists',
+      ])
+    })
+  })
+
+  describe('a second capstone checklist section', () => {
+    it('keeps the first and warns', () => {
+      const p = parsePlan(`${head}**Build**\n\n- [ ] one\n\n## Final capstone checklist\n\nFirst.\n\n- [ ] a\n- [ ] b\n\n## Capstone checklist, again\n\nSecond.\n\n- [ ] c\n`)
+      expect(p.capstone).toEqual({ intro: 'First.', items: [{ id: 'capstone:a', text: 'a' }, { id: 'capstone:b', text: 'b' }] })
+      expect(p.warnings).toEqual(['duplicate capstone checklist ignored'])
+    })
   })
 })
 
