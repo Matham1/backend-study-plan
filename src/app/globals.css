@@ -11,6 +11,10 @@
   --accent: light-dark(#0969da, #4493f8);
   --current-bg: light-dark(#ddf4ff, #15304e);
   --current-fg: light-dark(#0a3069, #cae8ff);
+  --ok: light-dark(#14742f, #3fb950);
+  --warn-bg: light-dark(#fff8c5, #3b2f06);
+  --warn-fg: light-dark(#4d2d00, #f2e0a0);
+  --warn-border: light-dark(#8a5a00, #e3b341);
   --scrim: light-dark(rgb(31 35 40 / 0.4), rgb(0 0 0 / 0.6));
   --bar-h: 3.25rem; /* the top bar, where it sticks (800px and up) */
 }
@@ -90,8 +94,9 @@ main:focus,
   top: 0.5rem;
 }
 
-/* Buttons: the Menu button, the theme toggle, Copy. */
+/* Buttons: the Menu button, the theme toggle, Copy, the step footer. A link can look like one too. */
 .btn {
+  display: inline-block;
   font: inherit;
   font-size: 0.85rem;
   color: var(--fg);
@@ -99,11 +104,45 @@ main:focus,
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.3rem 0.7rem;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .btn:hover {
   border-color: var(--accent);
+}
+
+/* The one action a screen is for. */
+.btn.primary {
+  background: var(--current-bg);
+  color: var(--current-fg);
+  border-color: var(--accent);
+}
+
+/* Text for screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Shown when progress can't be written to the browser. Fixed to the bottom of the screen so it is seen wherever the page is scrolled. */
+.save-warning {
+  position: fixed;
+  inset: auto 1rem 1rem;
+  z-index: 50;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 0 auto;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  font-size: 0.9rem;
 }
 
 /* The top bar. It scrolls away below 800px, where the Menu button's bar is what sticks. */
@@ -142,6 +181,18 @@ main:focus,
 .topbar nav a:hover {
   color: var(--fg);
   text-decoration: underline;
+}
+
+/* The count of cards due, beside "Review". */
+.badge {
+  display: inline-block; /* so a hovered link's underline stops short of it */
+  margin-left: 0.15rem;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  background: var(--current-bg);
+  color: var(--current-fg);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .theme-toggle {
@@ -288,7 +339,9 @@ main {
 }
 
 .side-list a {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.35rem 0.6rem;
   border-radius: 6px;
   color: var(--fg);
@@ -314,6 +367,40 @@ main {
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* A ✓ on a finished step or week. Its room is kept before progress loads, so a long title doesn't rewrap when the ✓ appears. */
+.tick {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  color: var(--ok);
+}
+
+/* Progress bars. The number is always written beside the bar, and the bar is just its picture. */
+.bar {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.sidebar .bar {
+  margin: 0 0.6rem 0.35rem;
+}
+
+.side-count {
+  margin: 0 0 0.5rem;
+  padding: 0 0.6rem;
+  min-height: 1lh; /* one line even while empty, so the list doesn't move when the count appears */
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
@@ -485,11 +572,47 @@ main {
 .pager {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
   margin-top: 2.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
+}
+
+/* The step footer's actions stay on the right, whether or not there is a Previous link. "Next" is larger than "Mark as unread". */
+.pager-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.pager .primary {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+/* A checkbox in place of each bullet. */
+.prose .checklist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.checklist input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.3rem 0 0;
+  accent-color: var(--accent);
 }
 
 /* A diagram the notes had as an image and the site doesn't have. */

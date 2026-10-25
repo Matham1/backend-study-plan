@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation'
 import { Fragment } from 'react'
 import { DocLayout } from '../../../../components/chrome'
 import { WeekSidebar } from '../../../../components/nav'
+import { Checklist, StepFooter, TrackVisit } from '../../../../components/progress-widgets'
 import {
+  afterWeek,
   applyFor,
   getWeek,
   inlineHtml,
@@ -42,16 +44,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function StepPage({ params }: Props) {
   const { week, steps, at, step, reading } = await stepOf(params)
-  const sidebar = <WeekSidebar week={weekIndex(week)} />
+  const index = weekIndex(week)
+  const sidebar = <WeekSidebar week={index} />
+  const visit = <TrackVisit path={step.path} />
+  const footer = <StepFooter week={index} stepId={step.id} after={afterWeek(week)} />
 
   if (reading) {
     const { notes, section } = reading
     return (
       <DocLayout sidebar={sidebar} toc={section.body ? tocOf(section.body) : undefined}>
         <article className="prose">
+          {visit}
           <p className="kicker">{`Step ${at + 1} of ${steps.length} · ${shortTitle(notes)} notes`}</p>
           <h1>{`${section.n}. ${section.title}`}</h1>
           {section.body && <div dangerouslySetInnerHTML={{ __html: section.body }} />}
+          {footer}
         </article>
       </DocLayout>
     )
@@ -67,15 +74,12 @@ export default async function StepPage({ params }: Props) {
     return (
       <DocLayout sidebar={sidebar} toc={toc}>
         <article className="prose">
+          {visit}
           <h1>Build & Test</h1>
           {week.checklists.map((list, i) => (
             <Fragment key={i}>
               <h2>{list.title}</h2>
-              <ul>
-                {list.items.map(task => (
-                  <li key={task.id} dangerouslySetInnerHTML={{ __html: inlineHtml(task.text) }} />
-                ))}
-              </ul>
+              <Checklist items={list.items.map(task => ({ id: task.id, html: inlineHtml(task.text) }))} />
             </Fragment>
           ))}
           {apply.map(group => (
@@ -84,6 +88,7 @@ export default async function StepPage({ params }: Props) {
               <div dangerouslySetInnerHTML={{ __html: group.html }} />
             </Fragment>
           ))}
+          {footer}
         </article>
       </DocLayout>
     )
@@ -93,6 +98,7 @@ export default async function StepPage({ params }: Props) {
   return (
     <DocLayout sidebar={sidebar}>
       <article className="prose">
+        {visit}
         <h1>Quiz</h1>
         {week.selfCheck && (
           <>
@@ -102,6 +108,7 @@ export default async function StepPage({ params }: Props) {
         )}
         {quizNotes(week).map(doc => doc.quiz.intro && <div key={doc.slug} dangerouslySetInnerHTML={{ __html: doc.quiz.intro }} />)}
         <p>{`${quizCards(week).length} cards`}</p>
+        {footer}
       </article>
     </DocLayout>
   )

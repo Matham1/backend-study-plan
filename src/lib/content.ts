@@ -120,6 +120,12 @@ export function weekIndex(week: Week): WeekIndex {
 
 export const weekIndexes = (): WeekIndex[] => weeks.map(weekIndex)
 
+/** Where a week's last step leads: the next week's Overview, or the Capstone after the last week. */
+export function afterWeek(week: Week): { path: string; title: string } {
+  const next = weeks[weeks.indexOf(week) + 1]
+  return next ? { path: `/week/${next.n}`, title: `Week ${next.n} · ${next.title}` } : { path: '/capstone', title: 'Capstone' }
+}
+
 const NAMED: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 
 /** The text of an HTML fragment: tags removed, character references decoded in one pass (so `&amp;lt;` stays `&lt;`). */

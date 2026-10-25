@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { ThemeToggle } from '../components/chrome'
+import { ReviewBadge, SaveWarning } from '../components/progress-widgets'
+import { allCards } from '../lib/content'
 import { THEME_SCRIPT } from '../lib/storage'
 import './globals.css'
 
@@ -27,13 +29,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             <nav aria-label="Main">
               <Link href="/">Dashboard</Link>
-              <Link href="/review">Review</Link>
+              <Link href="/review">
+                Review
+                <ReviewBadge cardIds={allCards().map(card => card.id)} />
+              </Link>
               <Link href="/capstone">Capstone</Link>
             </nav>
             <ThemeToggle />
           </div>
         </header>
         {children}
+        <SaveWarning />
       </body>
     </html>
   )
