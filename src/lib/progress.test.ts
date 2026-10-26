@@ -1,6 +1,6 @@
 process.env.TZ = 'Europe/Berlin' // EU DST ends on Sunday 2026-10-25
 import { describe, expect, it } from 'vitest'
-import { addDays, cardKeyAction, currentWeek, dueCardIds, isDue, nextDue, overallFraction, rate, today, weekStats, type Progress, type WeekIndex } from './progress'
+import { addDays, cardKeyAction, currentWeek, dueCardIds, isDue, nextDue, overallFraction, percent, rate, resumeLink, today, weekStats, type Progress, type WeekIndex } from './progress'
 
 const P = (over: Partial<Progress> = {}): Progress => ({ version: 1, updatedAt: '', checks: {}, read: {}, cards: {}, ...over })
 const D = '2026-10-25'
@@ -62,6 +62,34 @@ describe('progress (spec 8.1)', () => {
     const q = P({ cards: { a: { box: 1, due: D }, b: { box: 2, due: '2026-10-20' }, c: { box: 1, due: '2026-10-30' }, d: { box: 0 } } })
     expect(dueCardIds(['a', 'b', 'c', 'd'], q, D)).toEqual(['b', 'a'])
     expect(nextDue(['c', 'd'], q)).toBe('2026-10-30')
+  })
+})
+
+describe('resumeLink (the dashboard Continue button)', () => {
+  const weeks = [week(0, ['t1']), week(1, ['t2'])]
+  const go = (current: WeekIndex, lastVisited?: string) => resumeLink(weeks, current, P({ lastVisited }))
+  it('names only the step for a step in the current week', () => {
+    expect(go(weeks[1], '/week/1/x-2')).toEqual({ href: '/week/1/x-2', label: 'Continue: Two' })
+  })
+  it('names the week too for a step in another week', () => {
+    expect(go(weeks[1], '/week/0/build')).toEqual({ href: '/week/0/build', label: 'Continue: Week 0 · Build & Test' })
+  })
+  it('starts at the current week Overview when nothing was visited', () => {
+    expect(go(weeks[1])).toEqual({ href: '/week/1', label: 'Start: Week 1 · W1' })
+    expect(go(weeks[0])).toEqual({ href: '/week/0', label: 'Start: Week 0 · W0' }) // the first visit: Week 0 is the current week
+  })
+  it('does the same when the last page is no longer a step', () => {
+    expect(go(weeks[1], '/week/1/gone-3')).toEqual({ href: '/week/1', label: 'Start: Week 1 · W1' })
+    expect(go(weeks[1], '/week/7/build')).toEqual({ href: '/week/1', label: 'Start: Week 1 · W1' })
+  })
+})
+
+describe('percent', () => {
+  it.each([[0, 0], [0.5, 50], [1 / 3, 33], [2 / 3, 67], [1, 100]])('%s is %s', (fraction, out) => expect(percent(fraction)).toBe(out))
+  it('reads 100 only when the fraction is exactly 1', () => {
+    expect(percent(0.995)).toBe(99) // rounds to 100, but something is left
+    expect(percent(119 / 120)).toBe(99)
+    expect(percent(1 - Number.EPSILON)).toBe(99)
   })
 })
 

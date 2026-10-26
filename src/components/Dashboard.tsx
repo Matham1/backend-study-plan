@@ -3,19 +3,9 @@
 // The home page's progress: overall, the current week, cards due, and every week. Until `useProgress()` has the
 // browser's state (null on the server and before mount) no number is written and every bar is an empty track.
 import Link from 'next/link'
-import { currentWeek, dueCardIds, overallFraction, today, weekStats, type Progress, type WeekIndex } from '../lib/progress'
+import { currentWeek, dueCardIds, overallFraction, percent, resumeLink, today, weekStats, type Progress, type WeekIndex } from '../lib/progress'
 import { useProgress } from '../lib/storage'
 import { ProgressBar } from './progress-widgets'
-
-/** A whole percent that reads 100 only when the fraction is exactly 1, so a week one card short isn't shown as finished. */
-const percent = (fraction: number) => (fraction === 1 ? 100 : Math.min(99, Math.round(fraction * 100)))
-
-/** Where Continue goes: the step last visited, in any week; if there is none, the start of the first week. */
-function resumeLink(weeks: WeekIndex[], p: Progress) {
-  const step = weeks.flatMap(w => w.steps).find(s => s.path === p.lastVisited)
-  if (step) return { href: step.path, label: `Continue: ${step.title}` }
-  return { href: `/week/${weeks[0].n}`, label: `Start: Week ${weeks[0].n} · ${weeks[0].title}` }
-}
 
 /** The inside of the Current week card, once progress is known. `week` is undefined when no Build & Test box is left. */
 function CurrentWeek({ weeks, week, p }: { weeks: WeekIndex[]; week?: WeekIndex; p: Progress }) {
@@ -29,7 +19,7 @@ function CurrentWeek({ weeks, week, p }: { weeks: WeekIndex[]; week?: WeekIndex;
       </>
     )
   const stats = weekStats(week, p)
-  const go = resumeLink(weeks, p)
+  const go = resumeLink(weeks, week, p)
   return (
     <>
       <h2 className="card-title">{`Week ${week.n} · ${week.title}`}</h2>

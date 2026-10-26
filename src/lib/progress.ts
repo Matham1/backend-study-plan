@@ -95,9 +95,24 @@ export function overallFraction(weeks: WeekIndex[], p: Progress): number {
   return mean(weeks.map(w => weekStats(w, p).fraction))
 }
 
+/** A whole percent that reads 100 only when the fraction is exactly 1, so a week one card short isn't shown as finished. */
+export const percent = (fraction: number) => (fraction === 1 ? 100 : Math.min(99, Math.round(fraction * 100)))
+
 /** The first week with a Build & Test item not ticked yet. */
 export function currentWeek(weeks: WeekIndex[], p: Progress): WeekIndex | undefined {
   return weeks.find(w => w.taskIds.some(id => !p.checks[id]))
+}
+
+/**
+ * Where the dashboard's Continue button goes: the step last visited, in any week; the label names its week when that isn't
+ * `current`, the week the card shows. With no visit yet, or a path no step has any more, it starts the Overview of `current`.
+ */
+export function resumeLink(weeks: WeekIndex[], current: WeekIndex, p: Progress): { href: string; label: string } {
+  for (const week of weeks) {
+    const step = week.steps.find(s => s.path === p.lastVisited)
+    if (step) return { href: step.path, label: week.n === current.n ? `Continue: ${step.title}` : `Continue: Week ${week.n} · ${step.title}` }
+  }
+  return { href: `/week/${current.n}`, label: `Start: Week ${current.n} · ${current.title}` }
 }
 
 /** The cards due on `day`, earliest due date first. Ties keep the input order (Array#sort is stable). */
