@@ -74,7 +74,8 @@ export default async function StepPage({ params }: Props) {
     ])
     return (
       <DocLayout sidebar={sidebar} toc={toc}>
-        <article className="prose" data-pagefind-body>
+        {/* Pagefind titles a result by its h1, and ten pages share this one. A comma would split the meta value, so there is none. */}
+        <article className="prose" data-pagefind-body data-pagefind-meta={`title:Build & Test · Week ${week.n}`}>
           {visit}
           <h1>Build & Test</h1>
           {week.checklists.map((list, i) => (
