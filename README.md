@@ -86,10 +86,14 @@ Progress follows ids built from your content, so edit with this in mind:
 
 | Progress | Id | Example | If you change it |
 |---|---|---|---|
-| Ticks on study, Build, Test and capstone items | `w<N>:` (`capstone:` for the final list) plus the item's text (a study item's bold label counts), lowercased, with runs of other characters as `-`, cut at 60 characters | `w3:seed-script-about-50k-events-and-1m-bookings` | **Rewording an item clears its tick.** Adding, removing or moving other items moves nothing. Items that start alike get `-2`, `-3` by position. |
+| Ticks on study, Build, Test and capstone items | `w<N>:` (`capstone:` for the final list) plus the item's text (a study item's bold label counts), lowercased, with runs of other characters as `-`, cut at 60 characters | `w3:seed-script-about-50k-events-and-1m-bookings` | **Rewording an item clears its tick**, and so does changing its week's number (below). Adding, removing or moving other items moves nothing. Items that start alike get `-2`, `-3` by position. |
 | Read marks | `<notes slug>-<section number>` | `async-3` | **Renumbering sections moves the read marks.** |
 | Quiz cards | `<notes slug>-q<question number>` | `async-q4` | **Renumbering questions moves the cards.** |
 | Notes slug | the file name without the number prefix and `-notes.md`, with `_` as `-` | `1-async-notes.md` is `async`, `3-psql_indexes-notes.md` is `psql-indexes` | Renaming a file so its slug changes starts its read marks and cards over. Changing only the number prefix doesn't. |
+
+**Week numbers.** A tick's id starts with its week number, so inserting a week in the middle of the plan, or renumbering one, clears the ticks of every week whose number changes. Read marks and quiz cards don't carry a week number, so they survive, and so do the capstone ticks.
+
+**Non-Latin text.** A slug keeps only a–z and 0–9. An item with none of those (written entirely in Cyrillic, say) gets an empty slug, so its id is its position (`w3:`, `w3:-2`, `w3:-3`), and inserting such an item moves the ticks of the ones after it.
 
 Ids the content no longer uses stay in the browser and are ignored, so nothing breaks; the old tick just doesn't show.
 
