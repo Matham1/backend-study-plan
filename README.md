@@ -124,6 +124,8 @@ Progress is saved in your browser's localStorage, under keys that start with `ba
 
 To move it, open **Export / import** (`/progress`, linked in the sidebar outside the week pages). **Export** downloads `backend-study-progress-YYYY-MM-DD.json`. **Import** checks the file, asks before replacing everything on this device, and changes nothing if the file is bad.
 
+If the saved progress is ever unreadable, the site starts fresh and keeps the old text in localStorage under a `backend-study:progress:v1:backup-<time>` key (your browser's developer tools list it under Local Storage). That copy is exactly the text the site couldn't read, so importing it unchanged fails the same way. To get your progress back, copy the key's value into a text file, fix what the import error says is wrong, save it as a `.json` file and import it on the Export / import page.
+
 ## Deploy to GitHub Pages
 
 **A GitHub Pages site is public, and so are your notes on it.** Decide that before the first push.
