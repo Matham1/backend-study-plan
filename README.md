@@ -63,7 +63,7 @@ Adding a task, a week or a notes file needs no code change. Whatever the parser 
   - `the Week 4 part of "Apply it to the capstone"`: no reading pages, because that part appears on Build & Test;
   - `(days 1–3)`: no effect.
 
-  A qualifier it can't read is a warning, and the link then gives all sections. The text after each link is shown next to it on the Overview.
+  A qualifier it can't read is a warning, and the link then gives all sections. That includes a reversed range (`sections 5–1`) and any number it has no place for, such as `sections 6, 7` or `sections 1 and 3`: write `sections 6–7`. A section number the notes file doesn't have is a warning too, and that page is missing. The text after each link is shown next to it on the Overview.
 - **Study items:** a `**Study, in order**` line (any label starting with "Study" works) followed by a numbered list. An item can start with a bold label such as `**Day 1:**`, with the colon inside the bold. A label starting with "Optional" makes the item optional: it gets an "optional" tag and isn't needed to finish the Overview.
 - **Checklists:** any `**Label**` line on its own, followed by a `- [ ]` list, becomes a checklist on the Build & Test page, titled with the label: Build, Test, Build + Test, and so on. A week without one gets a warning. The dashboard's current week is the lowest-numbered week with an unticked Build or Test box.
 - **The end:** a `## Final capstone checklist` heading (any `##` heading containing "capstone checklist"), an intro sentence and `- [ ]` items feed the Capstone page.
@@ -103,7 +103,8 @@ The build prints each problem as one line, `[content] <file>: <warning>`, in the
 | `Week N: unknown field "X"` | Only Goal, Study notes and Self-check are fields. |
 | `Week N: "X" is not followed by a list`, `list without a **Label** line ignored`, `paragraph ignored` | A `**Label**` line must sit right above its list. Loose text inside a week is dropped. |
 | `Week N: link "X" matches no notes file` | Make the link text the notes title, or reuse the URL of a link that matches. |
-| `Week N: couldn't read "…" after "X"; using all sections` | Write the qualifier as `sections X–Y`. |
+| `Week N: couldn't read "…" after "X"; using all sections` | Write the qualifier as `sections X–Y`, the lower number first. A list such as `sections 6, 7` isn't read. |
+| `Week N: "X" names section M, which <file> doesn't have` | Fix the number in the plan, or add the section to the notes file. Until then that page is missing. |
 | `<file>: not linked from any week` | Link the file from a week's Study notes line, or no page shows it. |
 | `<file>: no "# Study Notes — …" title found` | Start the file with `# Study Notes — Title`. |
 | `<file>: missing "## Apply it to the capstone"` (or Check yourself, Answers, Sources) | Add the section. |

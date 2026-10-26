@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { type NotesData, notesSlug, parseNotes, parsePlan, plainText, resolveNotesRefs, textSlug } from './parse'
+import { checkRefSections, type NotesData, notesSlug, parseNotes, parsePlan, plainText, resolveNotesRefs, textSlug } from './parse'
 
 export const fixture = (f: string) => readFileSync(new URL(`./fixtures/${f}`, import.meta.url), 'utf8')
 const plan = parsePlan(fixture('study-plan.md'))
@@ -160,9 +160,46 @@ describe('plan warnings (remaining rules)', () => {
   })
   it('lets the first matching section rule win', () => {
     const sections = (after: string) => parsePlan(`${head}**Study notes:** [A](https://x) ${after}\n`).weeks[0].notesRefs[0].sections
-    expect(sections('sections 2-4 and section 9')).toEqual([2, 3, 4])
+    expect(sections('sections 2-4')).toEqual([2, 3, 4]) // the range, not just the "sections 2" the single rule would take
     expect(sections('section 7, and the Week 3 part of it')).toEqual([7])
     expect(sections('the Week 3 part of it')).toEqual([])
+  })
+})
+
+// Review fix: a typo in a section qualifier must not make reading pages vanish without a warning.
+describe('a section qualifier the parser cannot read is a warning, not fewer pages', () => {
+  const study = (after: string) =>
+    parsePlan(`# P\n\n## Week 0 — A (1 day)\n\n**Goal:** g\n\n**Study notes:** [A](https://x)${after}\n\n**Build**\n\n- [ ] t\n`)
+  it.each([
+    ['a reversed range', ', sections 5–1'],
+    ['a list of numbers', ', sections 6, 7'],
+    ['two sections joined by "and"', ', sections 1 and 3'],
+    ['a number after a range', ', sections 1–3, 5'],
+    ['a number that is no section', ', section 6 (2 pages)'],
+  ])('%s warns and gives all sections', (_, after) => {
+    const p = study(after)
+    expect(p.weeks[0].notesRefs[0].sections).toBe('all')
+    expect(p.warnings).toEqual([`Week 0: couldn't read "${after}" after "A"; using all sections`])
+  })
+  it.each([
+    [', sections 2–4', [2, 3, 4]],
+    [', sections 3–3', [3]],
+    [' (days 1–3), sections 2–4', [2, 3, 4]],
+    [', sections 8–10 and the Week 8 part of "Apply it to the capstone"', [8, 9, 10]],
+    [', the Week 4 part of "Apply it to the capstone"', []],
+  ])('still reads %j without a warning', (after, sections) => {
+    const p = study(after)
+    expect(p.weeks[0].notesRefs[0].sections).toEqual(sections)
+    expect(p.warnings).toEqual([])
+  })
+  it('catches the two typos from the review in the frozen plan', () => {
+    const typo = (from: string, to: string) => parsePlan(fixture('study-plan.md').replace(from, to))
+    const week2 = typo('sections 1–5', 'sections 5–1')
+    expect(week2.weeks[2].notesRefs[1].sections).toBe('all') // it had dropped Week 2's five testing pages
+    expect(week2.warnings).toEqual([`Week 2: couldn't read ", sections 5–1" after "Testing: Unit, Integration and CI"; using all sections`])
+    const week3 = typo('sections 6–7', 'sections 6, 7')
+    expect(week3.weeks[3].notesRefs[2].sections).toBe('all') // it had dropped testing-7
+    expect(week3.warnings).toEqual([`Week 3: couldn't read ", sections 6, 7" after "Testing"; using all sections`])
   })
 })
 
@@ -380,6 +417,36 @@ describe('resolveNotesRefs', () => {
     const weeks = [{ n: 0, notesRefs: [{ label: 'Nope', url: 'https://x', after: '', sections: 'all' as const }] }]
     expect(resolveNotesRefs(weeks, [{ slug: 'a', file: '0-a-notes.md', title: 'Week 0: A' }]))
       .toEqual(['study-plan.md: Week 0: link "Nope" matches no notes file', '0-a-notes.md: not linked from any week'])
+  })
+})
+
+describe('checkRefSections', () => {
+  const ref = (label: string, sections: number[] | 'all', slug?: string) => ({ label, url: 'https://x', after: '', sections, slug })
+  const doc = { slug: 'a', file: '1-a-notes.md', sections: [{ n: 1 }, { n: 2 }, { n: 3 }] }
+  it('warns for each section number the notes file does not have', () => {
+    expect(checkRefSections([{ n: 2, notesRefs: [ref('Testing', [2, 3, 4, 5], 'a')] }], [doc])).toEqual([
+      `study-plan.md: Week 2: "Testing" names section 4, which 1-a-notes.md doesn't have`,
+      `study-plan.md: Week 2: "Testing" names section 5, which 1-a-notes.md doesn't have`,
+    ])
+  })
+  it('says nothing for all sections, none, sections the file has, or a link that matched no file', () => {
+    const notesRefs = [ref('A', 'all', 'a'), ref('B', [], 'a'), ref('C', [1, 3], 'a'), ref('D', [9])]
+    expect(checkRefSections([{ n: 0, notesRefs }], [doc])).toEqual([])
+  })
+  it('finds every section the frozen plan names in the frozen notes', () => {
+    const p = parsePlan(fixture('study-plan.md'))
+    const docs = notesFiles.map(load)
+    expect(resolveNotesRefs(p.weeks, docs)).toEqual([])
+    expect(checkRefSections(p.weeks, docs)).toEqual([])
+  })
+  it('reports a range that runs past the end of the frozen testing notes', () => {
+    const p = parsePlan(fixture('study-plan.md').replace('sections 6–7', 'sections 6–12'))
+    const docs = notesFiles.map(load)
+    resolveNotesRefs(p.weeks, docs) // sets the slugs, as the build does before the check
+    expect(checkRefSections(p.weeks, docs)).toEqual([
+      `study-plan.md: Week 3: "Testing" names section 11, which 8-testing-notes.md doesn't have`,
+      `study-plan.md: Week 3: "Testing" names section 12, which 8-testing-notes.md doesn't have`,
+    ])
   })
 })
 

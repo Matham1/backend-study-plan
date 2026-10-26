@@ -2,7 +2,7 @@ import { basename } from 'node:path'
 import rehypePrettyCode from 'rehype-pretty-code'
 import rehypeSlug from 'rehype-slug'
 import { defineCollection, defineConfig, defineLoader, s } from 'velite'
-import { parseNotes, parsePlan, resolveNotesRefs } from './src/lib/parse'
+import { checkRefSections, parseNotes, parsePlan, resolveNotesRefs } from './src/lib/parse'
 
 // The parser does the splitting; the schemas below render each Markdown field to HTML under the same name.
 // No `content` is returned, so a required Markdown field that comes out undefined fails ("The content is empty")
@@ -85,7 +85,8 @@ export default defineConfig({
     const warnings = [
       ...plan.warnings.map(w => `study-plan.md: ${w}`),
       ...notes.flatMap(n => n.warnings.map(w => `${n.file}: ${w}`)),
-      ...resolveNotesRefs(plan.weeks, notes),
+      ...resolveNotesRefs(plan.weeks, notes), // sets each link's slug, which the next check reads
+      ...checkRefSections(plan.weeks, notes),
     ]
     for (const w of warnings) console.warn(`[content] ${w}`)
     if (!plan.weeks.length) throw new Error('study-plan.md: no weeks found')

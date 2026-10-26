@@ -189,21 +189,34 @@ const taskOf = (id: (text: string) => string) => (lines: string[]): TaskData => 
   return { id: id(text), text }
 }
 
+/**
+ * The sections the text after a notes link names: `sections 2–4` or `section 7`; none for "the Week 4 part of …"; all when
+ * only a "(days 1–3)" note and filler words are left. Undefined when it says more than that: a reversed range, or a number no
+ * form above accounts for (`sections 6, 7` would give just 6, and the 7 would drop out unseen).
+ */
+function sectionsNamed(after: string): NotesRef['sections'] | undefined {
+  const range = /sections?\s+(\d+)\s*[–-]\s*(\d+)/i.exec(after)
+  const one = /sections?\s+(\d+)/i.exec(after)
+  const rest = after.replace((range ?? one)?.[0] ?? '', '').replace(/\(\s*days?\b[^)]*\)|\bWeek\s+\d+\s+part\s+of\b/gi, '')
+  if (/\d/.test(rest)) return undefined
+  if (range) {
+    const [lo, hi] = [Number(range[1]), Number(range[2])]
+    return lo > hi ? undefined : Array.from({ length: hi - lo + 1 }, (_, k) => lo + k)
+  }
+  if (one) return [Number(one[1])]
+  if (/\bpart\s+of\b/i.test(after)) return []
+  return /[\p{L}\p{N}]/u.test(rest.replace(/\b(?:then|and)\b/gi, '')) ? undefined : 'all'
+}
+
 /** The `[label](url)` links of a Study notes field, each with the text after it and the sections it names. */
 function notesRefsOf(text: string, week: number, warnings: string[]): NotesRef[] {
   const links = [...text.matchAll(LINK)]
   return links.map((link, i) => {
     const [, label, url] = link
     const after = text.slice(link.index + link[0].length, links[i + 1]?.index).trimEnd()
-    const range = /sections?\s+(\d+)\s*[–-]\s*(\d+)/i.exec(after)
-    const one = /sections?\s+(\d+)/i.exec(after)
-    let sections: NotesRef['sections'] = 'all'
-    if (range) sections = Array.from({ length: Number(range[2]) - Number(range[1]) + 1 }, (_, k) => Number(range[1]) + k)
-    else if (one) sections = [Number(one[1])]
-    else if (/\bpart of\b/i.test(after)) sections = []
-    else if (after.replace(/\(\s*days?\b[^)]*\)/gi, '').replace(/\b(?:then|and)\b/gi, '').replace(/[^\p{L}\p{N}]+/gu, ''))
-      warnings.push(`Week ${week}: couldn't read "${after}" after "${label}"; using all sections`)
-    return { label, url, after, sections }
+    const sections = sectionsNamed(after)
+    if (!sections) warnings.push(`Week ${week}: couldn't read "${after}" after "${label}"; using all sections`)
+    return { label, url, after, sections: sections ?? 'all' }
   })
 }
 
@@ -497,4 +510,23 @@ export function resolveNotesRefs(
     // two files with one slug would hide each other from every lookup by slug
     ...notes.filter((n, i) => notes.findIndex(m => m.slug === n.slug) < i).map(n => `${n.file}: has the same slug "${n.slug}" as an earlier notes file`),
   ]
+}
+
+/**
+ * One warning per section number a plan link names that its notes file doesn't have (`sections 6–12` of a file with 10).
+ * Run it after `resolveNotesRefs`, which sets the slugs; a link that matched no file was reported there.
+ */
+export function checkRefSections(
+  weeks: { n: number; notesRefs: NotesRef[] }[],
+  notes: { slug: string; file: string; sections: { n: number }[] }[],
+): string[] {
+  return weeks.flatMap(w =>
+    w.notesRefs.flatMap(ref => {
+      const doc = notes.find(d => d.slug === ref.slug)
+      if (!doc || ref.sections === 'all') return []
+      return ref.sections
+        .filter(n => !doc.sections.some(s => s.n === n))
+        .map(n => `study-plan.md: Week ${w.n}: "${ref.label}" names section ${n}, which ${doc.file} doesn't have`)
+    }),
+  )
 }
