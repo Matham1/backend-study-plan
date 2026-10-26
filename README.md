@@ -128,7 +128,7 @@ If the saved progress is ever unreadable, the site starts fresh and keeps the ol
 
 ## Deploy to GitHub Pages
 
-**A GitHub Pages site is public, and so are your notes on it.** Decide that before the first push.
+**A GitHub Pages site is public, and so are your notes on it.** Decide that before the first push. On a free GitHub plan, Pages also needs a public repository.
 
 1. Create an empty GitHub repository and push `main`:
 
