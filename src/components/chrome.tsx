@@ -125,11 +125,20 @@ export function DocLayout({ sidebar, toc = [], children }: { sidebar: ReactNode;
   )
 }
 
-/** System → Light → Dark → System. It renders nothing until mounted, because the saved choice isn't known on the server. */
+/**
+ * System → Light → Dark → System. Until mounted the saved choice isn't known (the server has no localStorage), so a hidden
+ * button with the widest label holds the room the real one will take. Without it the top bar gains a row on a phone when
+ * the button appears, and the page below jumps.
+ */
 export function ThemeToggle() {
   const [theme, setChoice] = useState<'light' | 'dark' | null | undefined>(undefined)
   useEffect(() => setChoice(getTheme()), [])
-  if (theme === undefined) return null
+  if (theme === undefined)
+    return (
+      <button type="button" className="btn" style={{ visibility: 'hidden' }} aria-hidden="true">
+        Theme: System
+      </button>
+    )
   const next = theme === null ? 'light' : theme === 'light' ? 'dark' : null
   return (
     <button

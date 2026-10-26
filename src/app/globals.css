@@ -197,7 +197,7 @@ main:focus,
   font-weight: 600;
 }
 
-/* The theme toggle and Search stay on the right. The toggle has no room until the saved theme is read, so Search is what holds the edge. */
+/* The theme toggle and Search stay on the right. Until the saved theme is read, a hidden button holds the toggle's room (ThemeToggle). */
 .topbar-tools {
   display: flex;
   gap: 0.5rem;
