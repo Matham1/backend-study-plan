@@ -153,6 +153,7 @@ main:focus,
 }
 
 .topbar-inner {
+  position: relative; /* the search panel hangs from it */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -196,8 +197,39 @@ main:focus,
   font-weight: 600;
 }
 
-.theme-toggle {
+/* The theme toggle and Search stay on the right. The toggle has no room until the saved theme is read, so Search is what holds the edge. */
+.topbar-tools {
+  display: flex;
+  gap: 0.5rem;
   margin-left: auto;
+}
+
+/* Search: a panel under the top bar, with Pagefind's own UI inside. Its colours come from the site's tokens and its font is the
+   body's. They are set on the panel, because Pagefind's stylesheet sets its defaults on :root and is added to <head> after this one. */
+.search-panel {
+  --pagefind-ui-scale: 0.9;
+  --pagefind-ui-primary: var(--accent);
+  --pagefind-ui-text: var(--fg);
+  --pagefind-ui-background: var(--bg);
+  --pagefind-ui-border: var(--border-strong);
+  --pagefind-ui-tag: var(--surface);
+  --pagefind-ui-font: system-ui, sans-serif;
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 1rem;
+  z-index: 20;
+  width: min(40rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 8rem); /* what is left under a top bar that wraps to three lines */
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px var(--scrim);
+}
+
+.search-panel > p {
+  margin: 0;
 }
 
 /* The page: sidebar, reading column, "On this page". One column until 800px, where the sidebar stops being a drawer. */
@@ -277,6 +309,10 @@ main {
     flex-wrap: nowrap;
     height: var(--bar-h);
     padding-block: 0;
+  }
+
+  .search-panel {
+    max-height: calc(100dvh - var(--bar-h) - 1rem);
   }
 
   .docs {

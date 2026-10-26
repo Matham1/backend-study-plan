@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { ThemeToggle } from '../components/chrome'
+import { Search, ThemeToggle } from '../components/chrome'
 import { ReviewBadge, SaveWarning } from '../components/progress-widgets'
 import { allCards } from '../lib/content'
 import { THEME_SCRIPT } from '../lib/storage'
@@ -35,7 +35,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               </Link>
               <Link href="/capstone">Capstone</Link>
             </nav>
-            <ThemeToggle />
+            <div className="topbar-tools">
+              <ThemeToggle />
+              <Search />
+            </div>
           </div>
         </header>
         {children}

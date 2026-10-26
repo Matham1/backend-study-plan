@@ -54,7 +54,7 @@ export default async function StepPage({ params }: Props) {
     const { notes, section } = reading
     return (
       <DocLayout sidebar={sidebar} toc={section.body ? tocOf(section.body) : undefined}>
-        <article className="prose">
+        <article className="prose" data-pagefind-body>
           {visit}
           <p className="kicker">{`Step ${at + 1} of ${steps.length} · ${shortTitle(notes)} notes`}</p>
           <h1>{`${section.n}. ${section.title}`}</h1>
@@ -74,7 +74,7 @@ export default async function StepPage({ params }: Props) {
     ])
     return (
       <DocLayout sidebar={sidebar} toc={toc}>
-        <article className="prose">
+        <article className="prose" data-pagefind-body>
           {visit}
           <h1>Build & Test</h1>
           {week.checklists.map((list, i) => (

@@ -134,7 +134,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      className="btn theme-toggle"
+      className="btn"
       onClick={() => {
         setTheme(next)
         setChoice(next)
@@ -142,5 +142,120 @@ export function ThemeToggle() {
     >
       {`Theme: ${theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}`}
     </button>
+  )
+}
+
+declare global {
+  interface Window {
+    PagefindUI: new (options: Record<string, unknown>) => unknown // set by pagefind-ui.js once it has loaded
+  }
+}
+
+const base = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
+
+/** Adds a stylesheet or script to <head>. The promise settles when the file has loaded, or failed to. */
+const addToHead = (el: HTMLLinkElement | HTMLScriptElement) =>
+  new Promise((loaded, failed) => {
+    el.onload = loaded
+    el.onerror = failed
+    document.head.append(el)
+  })
+
+/**
+ * The Search button and its panel (spec 7.6), with Pagefind's own UI inside. `pagefind --site out` writes that UI after
+ * the build, so it is fetched when the panel first opens, and `next dev` has none. Opening again reuses what is mounted.
+ */
+export function Search() {
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+  const [openedFor, setOpenedFor] = useState(pathname)
+  const [missing, setMissing] = useState(false)
+  if (pathname !== openedFor) {
+    // A new page closes the panel. Setting state while rendering does that without an extra paint, as it does for the drawer.
+    setOpenedFor(pathname)
+    setOpen(false)
+  }
+  const button = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const requested = useRef(false)
+
+  // "/" opens it, unless the key is going into a field. The flashcard keys follow the same rule (cardKeyAction).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
+      if (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
+      e.preventDefault() // so the "/" doesn't land in the box that is about to get the focus
+      setOpen(true)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    // The box takes the focus with the last search selected, so typing replaces it.
+    const focusBox = () => {
+      const input = panel.current?.querySelector('input')
+      input?.focus()
+      input?.select()
+    }
+    if (requested.current) {
+      focusBox()
+    } else {
+      requested.current = true
+      Promise.all([
+        addToHead(Object.assign(document.createElement('link'), { rel: 'stylesheet', href: `${base}/pagefind/pagefind-ui.css` })),
+        addToHead(Object.assign(document.createElement('script'), { src: `${base}/pagefind/pagefind-ui.js` })),
+      ]).then(
+        () => {
+          new window.PagefindUI({ element: '#search-panel', showSubResults: true, showImages: false, baseUrl: `${base}/`, autofocus: true })
+          focusBox()
+        },
+        () => setMissing(true),
+      )
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
+    }
+    const onPointer = (e: PointerEvent) => {
+      if (![button.current, panel.current].some(el => el?.contains(e.target as Node))) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onPointer)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPointer)
+    }
+  }, [open])
+
+  return (
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="btn"
+        aria-expanded={open}
+        aria-controls="search-panel"
+        aria-keyshortcuts="/"
+        onClick={() => setOpen(!open)}
+      >
+        Search
+      </button>
+      <div
+        id="search-panel"
+        ref={panel}
+        className="search-panel"
+        hidden={!open}
+        onClick={e => {
+          // A result on the page already shown only moves to its heading: no route changes, which is what closes the panel otherwise.
+          if ((e.target as Element).closest('a')) setOpen(false)
+        }}
+      >
+        {missing && <p>Search works in the built site: run npm run build, then npm run preview.</p>}
+      </div>
+    </>
   )
 }

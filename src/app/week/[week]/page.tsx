@@ -32,7 +32,7 @@ export default async function Overview({ params }: Props) {
   const step = index.steps[0] // the Overview
   return (
     <DocLayout sidebar={<WeekSidebar week={index} />}>
-      <article className="prose">
+      <article className="prose" data-pagefind-body>
         <TrackVisit path={step.path} />
         <p className="kicker">{week.duration ? `Week ${week.n} · ${week.duration}` : `Week ${week.n}`}</p>
         <h1>{week.title}</h1>
@@ -79,7 +79,7 @@ export default async function Overview({ params }: Props) {
               </details>
             ),
         )}
-        <nav className="pager" aria-label="Previous and next week">
+        <nav className="pager" aria-label="Previous and next week" data-pagefind-ignore>
           {prev && <Link href={`/week/${prev.n}`}>{`← Week ${prev.n} · ${prev.title}`}</Link>}{' '}
           {next && <Link href={`/week/${next.n}`}>{`Week ${next.n} · ${next.title} →`}</Link>}
         </nav>
