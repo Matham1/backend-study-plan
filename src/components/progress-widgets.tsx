@@ -4,7 +4,7 @@
 // server and before mount) each one renders a neutral placeholder, so no page ever shows a made-up 0%.
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { dueCardIds, today, weekStats, type WeekIndex } from '../lib/progress'
 import { update, useProgress, useSaveFailed } from '../lib/storage'
 
@@ -28,39 +28,51 @@ export function ProgressBar({ fraction }: { fraction: number | null }) {
   )
 }
 
+type ChecklistItem = { id: string; html: string; label?: string; optional?: boolean }
+
+/**
+ * One checkbox. Its text is not in a <label>: Pagefind leaves a label's text out of the search index, and the checklists must be
+ * searchable. So the text names the box (aria-labelledby), and a click on the row ticks it, as a click on a label would.
+ */
+function CheckItem({ item, checked, disabled }: { item: ChecklistItem; checked: boolean; disabled: boolean }) {
+  const textId = useId()
+  // `on` is what the box says after the click; without it the saved state is flipped (a click on the text).
+  const tick = (on?: boolean) => update(q => ({ ...q, checks: withKey(q.checks, item.id, on ?? !q.checks[item.id]) }))
+  return (
+    <li
+      onClick={e => {
+        // Not a click on the box (it ticks itself), on a link (it is followed), or the end of a drag that selected text (copying must not
+        // tick). A double click is two clicks, as on a label, so selecting a word leaves the box as it was.
+        if (disabled || (e.target as Element).closest('input, a') || (e.detail < 2 && window.getSelection()?.isCollapsed === false)) return
+        tick()
+      }}
+    >
+      <input type="checkbox" aria-labelledby={textId} checked={checked} disabled={disabled} onChange={e => tick(e.currentTarget.checked)} />
+      <span id={textId}>
+        {item.label && (
+          <>
+            <strong>{`${item.label}:`}</strong>{' '}
+          </>
+        )}
+        <span dangerouslySetInnerHTML={{ __html: item.html }} />
+        {item.optional && (
+          <>
+            {' '}
+            <span className="tag">optional</span>
+          </>
+        )}
+      </span>
+    </li>
+  )
+}
+
 /** A checkbox per item, saved under its id. `html` is already inline (the page unwraps it on the server). */
-export function Checklist({ items }: { items: { id: string; html: string; label?: string; optional?: boolean }[] }) {
+export function Checklist({ items }: { items: ChecklistItem[] }) {
   const p = useProgress()
   return (
     <ul className="checklist">
       {items.map(item => (
-        <li key={item.id}>
-          <label>
-            <input
-              type="checkbox"
-              checked={!!p?.checks[item.id]}
-              disabled={!p}
-              onChange={e => {
-                const on = e.currentTarget.checked
-                update(q => ({ ...q, checks: withKey(q.checks, item.id, on) }))
-              }}
-            />
-            <span>
-              {item.label && (
-                <>
-                  <strong>{`${item.label}:`}</strong>{' '}
-                </>
-              )}
-              <span dangerouslySetInnerHTML={{ __html: item.html }} />
-              {item.optional && (
-                <>
-                  {' '}
-                  <span className="tag">optional</span>
-                </>
-              )}
-            </span>
-          </label>
-        </li>
+        <CheckItem key={item.id} item={item} checked={!!p?.checks[item.id]} disabled={!p} />
       ))}
     </ul>
   )

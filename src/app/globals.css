@@ -631,13 +631,13 @@ main {
   font-size: 0.95rem;
 }
 
-/* A checkbox in place of each bullet. */
+/* A checkbox in place of each bullet. The whole row ticks it, as a label would (Checklist in progress-widgets.tsx). */
 .prose .checklist {
   list-style: none;
   padding-left: 0;
 }
 
-.checklist label {
+.checklist li {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
