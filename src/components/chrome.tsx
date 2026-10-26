@@ -168,16 +168,20 @@ const addToHead = (el: HTMLLinkElement | HTMLScriptElement) =>
 export function Search() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [openedFor, setOpenedFor] = useState(pathname)
   const [missing, setMissing] = useState(false)
-  if (pathname !== openedFor) {
-    // A new page closes the panel. Setting state while rendering does that without an extra paint, as it does for the drawer.
-    setOpenedFor(pathname)
-    setOpen(false)
-  }
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const requested = useRef(false)
+
+  // Closes the panel. Focus that is in it goes to the Search button: the hidden panel would drop it to <body>. Every close but an
+  // outside click comes through here; there the focus goes where the click lands.
+  const close = () => {
+    if (panel.current?.contains(document.activeElement)) button.current?.focus()
+    setOpen(false)
+  }
+
+  // A new page closes the panel. A layout effect: the page is committed but not painted, and the panel is still shown with its focus.
+  useLayoutEffect(close, [pathname]) // close uses only refs and a setter, so the copy from any render does the same
 
   // "/" opens it, unless the key is going into a field. The flashcard keys follow the same rule (cardKeyAction).
   useEffect(() => {
@@ -215,18 +219,15 @@ export function Search() {
         () => setMissing(true),
       )
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      setOpen(false)
-      button.current?.focus()
-    }
+    // Capturing, so Escape gets here before Pagefind's box blurs itself on it, while the focus is still in the panel.
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
     const onPointer = (e: PointerEvent) => {
       if (![button.current, panel.current].some(el => el?.contains(e.target as Node))) setOpen(false)
     }
-    document.addEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
     document.addEventListener('pointerdown', onPointer)
     return () => {
-      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointer)
     }
   }, [open])
@@ -240,7 +241,7 @@ export function Search() {
         aria-expanded={open}
         aria-controls="search-panel"
         aria-keyshortcuts="/"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         Search
       </button>
@@ -251,7 +252,7 @@ export function Search() {
         hidden={!open}
         onClick={e => {
           // A result on the page already shown only moves to its heading: no route changes, which is what closes the panel otherwise.
-          if ((e.target as Element).closest('a')) setOpen(false)
+          if ((e.target as Element).closest('a')) close()
         }}
       >
         {missing && <p>Search works in the built site: run npm run build, then npm run preview.</p>}
