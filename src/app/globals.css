@@ -1,0 +1,939 @@
+/* Colour tokens. Each is a light-dark() pair: the page follows the system until the theme toggle puts data-theme on <html>. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#fff, #14171b);
+  --surface: light-dark(#f6f8fa, #1d2126);
+  --fg: light-dark(#1f2328, #e6e9ed);
+  --muted: light-dark(#59636e, #9ca6b2);
+  --border: light-dark(#d1d9e0, #353c45);
+  --border-strong: light-dark(#848d97, #78828d);
+  --link: light-dark(#0550ae, #79b8ff);
+  --accent: light-dark(#0969da, #4493f8);
+  --current-bg: light-dark(#ddf4ff, #15304e);
+  --current-fg: light-dark(#0a3069, #cae8ff);
+  --ok: light-dark(#14742f, #3fb950);
+  --warn-bg: light-dark(#fff8c5, #3b2f06);
+  --warn-fg: light-dark(#4d2d00, #f2e0a0);
+  --warn-border: light-dark(#8a5a00, #e3b341);
+  --scrim: light-dark(rgb(31 35 40 / 0.4), rgb(0 0 0 / 0.6));
+  --bar-h: 3.25rem; /* the top bar, where it sticks (800px and up) */
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-padding-top: 4.5rem; /* a heading you jump to stays clear of the bar that sticks to the top */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--link);
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Programmatic focus targets (the skip link's target, the open drawer and the flashcard box): they get focus, but a ring round the whole panel says nothing. */
+main:focus,
+.sidebar:focus,
+.flashcards:focus {
+  outline: none;
+}
+
+/* The sidebar and "On this page" scroll, which would clip a ring drawn outside the link: draw it inside. */
+.side-list a:focus-visible,
+.toc a:focus-visible,
+.toc-inline a:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 100;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* Buttons: the Menu button, the theme toggle, Copy, the step footer. A link can look like one too. */
+.btn {
+  display: inline-block;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+/* The one action a screen is for. */
+.btn.primary {
+  background: var(--current-bg);
+  color: var(--current-fg);
+  border-color: var(--accent);
+}
+
+/* Text for screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Shown when progress can't be written to the browser. Fixed to the bottom of the screen so it is seen wherever the page is scrolled. */
+.save-warning {
+  position: fixed;
+  inset: auto 1rem 1rem;
+  z-index: 50;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 0 auto;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  font-size: 0.9rem;
+}
+
+/* The top bar. It scrolls away below 800px, where the Menu button's bar is what sticks. */
+.topbar {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-inner {
+  position: relative; /* the search panel hangs from it */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.topbar nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.topbar nav a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+/* The count of cards due, beside "Review". */
+.badge {
+  display: inline-block; /* so a hovered link's underline stops short of it */
+  margin-left: 0.15rem;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  background: var(--current-bg);
+  color: var(--current-fg);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* The theme toggle and Search stay on the right. Until the saved theme is read, a hidden button holds the toggle's room (ThemeToggle). */
+.topbar-tools {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Search: a panel under the top bar, with Pagefind's own UI inside. Its colours come from the site's tokens and its font is the
+   body's. They are set on the panel, because Pagefind's stylesheet sets its defaults on :root and is added to <head> after this one. */
+.search-panel {
+  --pagefind-ui-scale: 0.9;
+  --pagefind-ui-primary: var(--accent);
+  --pagefind-ui-text: var(--fg);
+  --pagefind-ui-background: var(--bg);
+  --pagefind-ui-border: var(--border-strong);
+  --pagefind-ui-tag: var(--surface);
+  --pagefind-ui-font: system-ui, sans-serif;
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 1rem;
+  z-index: 20;
+  width: min(40rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 8rem); /* what is left under a top bar that wraps to three lines */
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px var(--scrim);
+}
+
+.search-panel > p {
+  margin: 0;
+}
+
+/* The page: sidebar, reading column, "On this page". One column until 800px, where the sidebar stops being a drawer. */
+.docs {
+  max-width: 82rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.menubar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0 -1rem;
+  padding: 0.5rem 1rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+main {
+  min-width: 0;
+  padding: 1rem 0 4rem;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: min(20rem, 85vw);
+  overflow-y: auto;
+  padding: 1rem;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  transform: translateX(-100%);
+  visibility: hidden; /* off-canvas links must not be reachable by Tab */
+  transition:
+    transform 0.2s ease,
+    visibility 0s linear 0.2s;
+}
+
+.docs[data-drawer='open'] .sidebar {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.2s ease;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--scrim);
+}
+
+@media (width < 800px) {
+  body:has(.docs[data-drawer='open']) {
+    overflow: hidden; /* the page behind the drawer doesn't scroll */
+  }
+}
+
+.toc {
+  display: none;
+  position: sticky;
+  top: var(--bar-h);
+  max-height: calc(100dvh - var(--bar-h));
+  overflow-y: auto;
+  padding-top: 1.5rem;
+}
+
+@media (min-width: 800px) {
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+
+  .topbar-inner {
+    flex-wrap: nowrap;
+    height: var(--bar-h);
+    padding-block: 0;
+  }
+
+  .search-panel {
+    max-height: calc(100dvh - var(--bar-h) - 1rem);
+  }
+
+  .docs {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    align-items: start; /* not stretched, so the sidebar and the list on the right can stick */
+    column-gap: 2rem;
+  }
+
+  .menubar,
+  .backdrop {
+    display: none;
+  }
+
+  .sidebar {
+    position: sticky;
+    inset: var(--bar-h) auto auto auto;
+    z-index: auto;
+    width: auto;
+    max-height: calc(100dvh - var(--bar-h));
+    padding: 1.5rem 0.5rem 1.5rem 0;
+    background: none;
+    border-right: 0;
+    transform: none;
+    visibility: visible;
+    transition: none;
+  }
+
+  main {
+    padding-top: 1.5rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .docs {
+    grid-template-columns: 260px minmax(0, 1fr) 220px;
+  }
+
+  .toc {
+    display: block;
+  }
+
+  .toc-inline {
+    display: none;
+  }
+}
+
+/* Sidebar lists. */
+.side-title {
+  margin: 0 0 0.5rem;
+  padding: 0 0.6rem;
+  font-weight: 600;
+}
+
+.side-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.side-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.side-list a:hover {
+  background: var(--surface);
+}
+
+.side-list a.indent {
+  padding-left: 1.2rem;
+}
+
+.side-list a[aria-current='page'] {
+  background: var(--current-bg);
+  color: var(--current-fg);
+  font-weight: 600;
+}
+
+.side-group {
+  padding: 0.9rem 0.6rem 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* A ✓ on a finished step or week. Its room is kept before progress loads, so a long title doesn't rewrap when the ✓ appears. */
+.tick {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  color: var(--ok);
+}
+
+/* Progress bars. The number is always written beside the bar, and the bar is just its picture. */
+.bar {
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.sidebar .bar {
+  margin: 0 0.6rem 0.35rem;
+}
+
+.side-count {
+  margin: 0 0 0.5rem;
+  padding: 0 0.6rem;
+  min-height: 1lh; /* one line even while empty, so the list doesn't move when the count appears */
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* "On this page": the list on the right from 1100px, a block at the top of the column below. */
+.toc-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.toc-inline {
+  margin: 0 0 1.5rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.toc-inline summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.toc ul,
+.toc-inline ul {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.toc ul {
+  border-left: 1px solid var(--border);
+}
+
+.toc a,
+.toc-inline a {
+  display: block;
+  padding: 0.25rem 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.toc a:hover,
+.toc-inline a:hover {
+  color: var(--fg);
+}
+
+.toc [data-level='3'] a,
+.toc-inline [data-level='3'] a {
+  padding-left: 1.5rem;
+}
+
+/* The reading column: 17px text, 1.6 line height, at most 75 characters wide. */
+.prose {
+  max-width: 75ch;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow-wrap: break-word; /* not "anywhere": that would squeeze table columns instead of letting the table scroll */
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose :is(h1, h2, h3) {
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.prose h1 {
+  margin: 0.25rem 0 1rem;
+  font-size: 2rem;
+}
+
+.prose h2 {
+  margin: 2.25rem 0 0.75rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.5rem;
+}
+
+.prose h3 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.2rem;
+}
+
+.prose :is(p, ul, ol, table, blockquote, details) {
+  margin: 0 0 1em;
+}
+
+.prose :is(ul, ol) {
+  padding-left: 1.5rem;
+}
+
+.prose li + li {
+  margin-top: 0.3em;
+}
+
+.prose li > :is(ul, ol) {
+  margin: 0.3em 0 0;
+}
+
+.prose blockquote {
+  margin-inline: 0;
+  padding: 0.1em 1em;
+  border-left: 4px solid var(--border);
+  color: var(--muted);
+}
+
+.prose :not(pre) > code {
+  padding: 0.1em 0.35em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  font-size: 0.875em;
+}
+
+/* Wide tables scroll inside their own box, so the page never does. */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+  line-height: 1.45;
+}
+
+.prose :is(th, td) {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: var(--surface);
+}
+
+.prose details {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.prose summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.kicker {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0 0.5em;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75em;
+  vertical-align: 0.1em;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* The step footer's actions stay on the right, whether or not there is a Previous link. "Next" is larger than "Mark as unread". */
+.pager-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.pager .primary {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+/* A checkbox in place of each bullet. The whole row ticks it, as a label would (Checklist in progress-widgets.tsx). */
+.prose .checklist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  cursor: pointer;
+}
+
+.checklist input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.3rem 0 0;
+  accent-color: var(--accent);
+}
+
+/* The dashboard. Selectors start with .prose where they must beat its rules for p, h2, ul and li. */
+.overall {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+}
+
+/* Current week and Review. Each keeps the room its text takes once progress is known (a two-line title and a
+   two-line Continue button; one line for the count of cards), so the weeks below don't jump when it arrives. */
+.dash-top {
+  display: grid;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.dash-top > :first-child {
+  min-height: 15.5rem;
+}
+
+.dash-top > :last-child {
+  min-height: 9rem;
+}
+
+@media (min-width: 40rem) {
+  .dash-top {
+    grid-template-columns: 3fr 2fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.prose .card > * {
+  margin: 0;
+}
+
+.prose .card-title {
+  padding: 0;
+  border: 0;
+  font-size: 1.25rem;
+}
+
+/* The button stays at the bottom of its card, whether or not the card has its text yet. */
+.prose .card > .btn {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+.prose .week-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.prose .week-grid > li {
+  margin: 0;
+}
+
+/* The week's title is the link's own text, so it is what the link is named by; the small lines around it are spans. */
+.week-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.week-card:hover {
+  border-color: var(--accent);
+}
+
+/* The current week is marked the way the current step is in the sidebar. */
+.week-card.current {
+  border-color: var(--accent);
+  background: var(--current-bg);
+  color: var(--current-fg);
+}
+
+.week-meta,
+.week-pct {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.week-pct {
+  min-height: 1lh; /* one line even while empty, so nothing moves when the number appears */
+}
+
+.week-pct.done {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.week-card.current :is(.week-meta, .week-pct:not(.done)) {
+  color: inherit;
+}
+
+/* The Capstone's weeks: a link on the left, "ticked / total" on the right. */
+.prose .capstone-weeks {
+  list-style: none;
+  padding: 0;
+}
+
+.prose .capstone-weeks li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.capstone-weeks .count {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Export / import. */
+.io label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+
+.notice {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+
+.notice.ok {
+  border-color: var(--ok);
+  background: var(--surface);
+  color: var(--fg);
+}
+
+/* Flashcards: the quiz and Review. One column with a gap, as the dashboard cards have; .prose's margins on p and details are undone where they would add to it. */
+.flashcards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.prose .flashcards > * {
+  margin: 0;
+}
+
+.flashcards p:last-child {
+  margin-bottom: 0;
+}
+
+/* Before progress loads: about a card that is not flipped (13rem for a two-line question), so the footer below moves less when the card arrives. */
+.flashcards[aria-busy='true'] {
+  min-height: 13rem;
+}
+
+.flashcards .fc-head {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Which notes the card is from, close under the count. */
+.flashcards .fc-head + .kicker {
+  margin-top: -0.5rem;
+}
+
+.flashcards hr {
+  border: 0;
+  border-top: 1px solid var(--border-strong);
+}
+
+.flashcards .fc-none {
+  color: var(--muted);
+}
+
+.fc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.flashcards .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+/* The key that does the same as the button. It takes the button's colour, so it reads as well as the label does. */
+.btn kbd {
+  margin-left: 0.35rem;
+  padding: 0 0.35em;
+  border: 1px solid;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.flashcards details {
+  margin: 0 0 0.5rem;
+  background: var(--bg);
+}
+
+.flashcards details:last-child {
+  margin-bottom: 0;
+}
+
+.flashcards details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+/* A question is the summary: its paragraph stays on the line of the arrow. */
+.flashcards summary > p {
+  display: inline;
+  margin: 0;
+}
+
+/* A diagram the notes had as an image and the site doesn't have. */
+.diagram-missing {
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+/* Code. rehype-pretty-code leaves both themes' colours as variables on the <pre> and its spans; the active scheme picks one. */
+figure[data-rehype-pretty-code-figure] {
+  position: relative;
+  margin: 0 0 1em;
+}
+
+pre {
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: light-dark(var(--shiki-light-bg), var(--shiki-dark-bg));
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+pre span {
+  color: light-dark(var(--shiki-light), var(--shiki-dark));
+}
+
+.copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.copy:hover,
+.copy:focus-visible {
+  opacity: 1;
+}
