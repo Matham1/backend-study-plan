@@ -8,9 +8,12 @@ const D = '2026-10-25'
 describe('rate (spec 8.2)', () => {
   it.each([
     ['didnt, anything', { box: 0 } as const, false, { box: 1, due: '2026-10-26' }],
+    ['didnt, box 3 due', { box: 3, due: D } as const, false, { box: 1, due: '2026-10-26' }],
     ['knew, never rated', undefined, true, { box: 0 }],
     ['knew, box 0', { box: 0 } as const, true, { box: 0 }],
     ['knew, not due yet', { box: 1, due: '2026-10-26' } as const, true, { box: 1, due: '2026-10-26' }],
+    ['knew, box 2 not due yet', { box: 2, due: '2026-10-27' } as const, true, { box: 2, due: '2026-10-27' }],
+    ['knew, box 3 not due yet', { box: 3, due: '2026-11-01' } as const, true, { box: 3, due: '2026-11-01' }],
     ['knew, box 1 due', { box: 1, due: D } as const, true, { box: 2, due: '2026-10-28' }],
     ['knew, box 2 overdue', { box: 2, due: '2026-10-01' } as const, true, { box: 3, due: '2026-11-01' }],
     ['knew, box 3 due', { box: 3, due: D } as const, true, { box: 0 }],
