@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { Fragment } from 'react'
 import { DocLayout } from '../../../../components/chrome'
+import { Flashcards } from '../../../../components/Flashcards'
 import { WeekSidebar } from '../../../../components/nav'
 import { Checklist, StepFooter, TrackVisit } from '../../../../components/progress-widgets'
 import {
@@ -94,7 +95,7 @@ export default async function StepPage({ params }: Props) {
     )
   }
 
-  // The quiz: the card count stands in for the flashcards until they exist.
+  // The quiz: the Self-check and the notes' intro, then the flashcards.
   return (
     <DocLayout sidebar={sidebar}>
       <article className="prose">
@@ -107,7 +108,7 @@ export default async function StepPage({ params }: Props) {
           </>
         )}
         {quizNotes(week).map(doc => doc.quiz.intro && <div key={doc.slug} dangerouslySetInnerHTML={{ __html: doc.quiz.intro }} />)}
-        <p>{`${quizCards(week).length} cards`}</p>
+        <Flashcards cards={quizCards(week)} mode="quiz" weekPath={`/week/${week.n}`} />
         {footer}
       </article>
     </DocLayout>

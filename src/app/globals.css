@@ -60,9 +60,10 @@ pre {
   outline-offset: 2px;
 }
 
-/* Programmatic focus targets (the skip link's target and the open drawer): they get focus, but a ring round the whole panel says nothing. */
+/* Programmatic focus targets (the skip link's target, the open drawer and the flashcard box): they get focus, but a ring round the whole panel says nothing. */
 main:focus,
-.sidebar:focus {
+.sidebar:focus,
+.flashcards:focus {
   outline: none;
 }
 
@@ -771,6 +772,90 @@ main {
   border-color: var(--ok);
   background: var(--surface);
   color: var(--fg);
+}
+
+/* Flashcards: the quiz and Review. One column with a gap, as the dashboard cards have; .prose's margins on p and details are undone where they would add to it. */
+.flashcards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.prose .flashcards > * {
+  margin: 0;
+}
+
+.flashcards p:last-child {
+  margin-bottom: 0;
+}
+
+/* Before progress loads: about a card that is not flipped (13rem for a two-line question), so the footer below moves less when the card arrives. */
+.flashcards[aria-busy='true'] {
+  min-height: 13rem;
+}
+
+.flashcards .fc-head {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Which notes the card is from, close under the count. */
+.flashcards .fc-head + .kicker {
+  margin-top: -0.5rem;
+}
+
+.flashcards hr {
+  border: 0;
+  border-top: 1px solid var(--border-strong);
+}
+
+.flashcards .fc-none {
+  color: var(--muted);
+}
+
+.fc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.flashcards .btn {
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+/* The key that does the same as the button. It takes the button's colour, so it reads as well as the label does. */
+.btn kbd {
+  margin-left: 0.35rem;
+  padding: 0 0.35em;
+  border: 1px solid;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.flashcards details {
+  margin: 0 0 0.5rem;
+  background: var(--bg);
+}
+
+.flashcards details:last-child {
+  margin-bottom: 0;
+}
+
+.flashcards details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+/* A question is the summary: its paragraph stays on the line of the arrow. */
+.flashcards summary > p {
+  display: inline;
+  margin: 0;
 }
 
 /* A diagram the notes had as an image and the site doesn't have. */
